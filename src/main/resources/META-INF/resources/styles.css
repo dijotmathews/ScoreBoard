@@ -1,1 +1,33 @@
 /* Add your styles here */
+.mobile-home {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 480px;
+    min-height: 100dvh;
+    margin-inline: auto;
+
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-right: max(16px, env(safe-area-inset-right));
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+    padding-left: max(16px, env(safe-area-inset-left));
+
+    gap: 16px;
+}
+
+.mobile-home-title {
+    margin: 0 0 8px;
+    overflow-wrap: anywhere;
+}
+
+.mobile-home vaadin-button,
+.mobile-home vaadin-text-field,
+.mobile-home vaadin-password-field,
+.mobile-home vaadin-select,
+.mobile-home vaadin-combo-box {
+    width: 100%;
+    min-width: 0;
+}
+
+.mobile-home vaadin-button {
+    min-height: 48px;
+}
