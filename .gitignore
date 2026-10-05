@@ -14,3 +14,5 @@ src/main/frontend/generated/
 vite.generated.ts
 
 app.db
+
+.playwright-mcp

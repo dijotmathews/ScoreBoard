@@ -1,5 +1,6 @@
 package com.dijo.benefits;
 
+import com.dijo.events.DrawService;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
@@ -54,21 +55,20 @@ public class DemoPlayersInitializer implements CommandLineRunner {
                         admin, null, admin.getAuthorities()));
                 SecurityContextHolder.setContext(context);
 
+                // Default benefits, unless an admin has already configured them.
+                jdbc.update("""
+                        INSERT INTO benefit_settings(id, fee_paise, coupon_count, coupon_description)
+                        VALUES (1, 50000, 2, 'Refreshment')
+                        ON CONFLICT(id) DO NOTHING
+                        """);
+                long fee = benefits.settings().orElseThrow().feePaise();
                 String eventId = "demo-tournament-12";
                 jdbc.update("""
-                        INSERT INTO benefit_events
-                        (id, name, fee_paise, coupon_count, coupon_description)
-                        VALUES (?, 'Demo Tournament', 50000, 2, 'Refreshment')
+                        INSERT INTO events(id, name, contestant_count)
+                        VALUES (?, 'Demo Tournament', 16)
                         ON CONFLICT(id) DO NOTHING
                         """, eventId);
-                Integer validEvent = jdbc.queryForObject("""
-                        SELECT count(*) FROM benefit_events WHERE id = ?
-                        AND fee_paise = 50000 AND coupon_count = 2
-                        AND coupon_description = 'Refreshment'
-                        """, Integer.class, eventId);
-                if (validEvent == null || validEvent != 1) {
-                    throw new IllegalStateException("Demo event already exists with different settings");
-                }
+                jdbc.update(DrawService.CREATE_EMPTY_DRAWS, eventId, eventId);
                 for (int i = 1; i <= 12; i++) {
                     String username = "player%02d".formatted(i);
                     if (!users.userExists(username)) {
@@ -76,8 +76,12 @@ public class DemoPlayersInitializer implements CommandLineRunner {
                                 .password(encoder.encode("Player%02d@12345".formatted(i)))
                                 .roles("USER").build());
                     }
-                    benefits.confirmPayment(eventId, username,
-                            "DEMO:" + eventId + ":" + username, 50000);
+                    Integer signedUp = jdbc.queryForObject(
+                            "SELECT count(*) FROM entry_payments WHERE player_username = ?",
+                            Integer.class, username);
+                    if (signedUp == null || signedUp == 0) {
+                        benefits.confirmPayment(username, "DEMO:" + eventId + ":" + username, fee);
+                    }
                 }
             });
         } finally {

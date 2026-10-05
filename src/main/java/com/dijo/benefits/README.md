@@ -23,10 +23,15 @@ from Vaadin server-side click listeners.
 
 ## Business rules
 
-- ADMIN configures event fee and coupons.
+- Benefits are independent of events. ADMIN configures one entry fee and the
+  coupons every signed-up player receives (benefit_settings, a single row).
 - ADMIN or OFFICIAL manually confirms an independently verified full payment.
+  A confirmed payment signs the player up for the tournament.
 - An enabled ROLE_USER account is treated as a player.
-- One payment per player per event; a payment reference is globally unique.
+- One payment (sign-up) per player; a payment reference is globally unique.
+- Events (com.dijo.events) have a power-of-2 contestant count and an empty draw of
+  that size. ADMIN places signed-up players into draw slots; a player can take part
+  in several events but holds at most one slot per event.
 - Money uses integer paise: 50000 means INR 500.00.
 - Exact repeated confirmation returns the original benefits. A different reference
   for an already-paid player/event is rejected, not silently recorded.
@@ -36,8 +41,7 @@ from Vaadin server-side click listeners.
   monetary discount coupon; value, expiry and category rules are not specified.
 - Handover/redemption writes use atomic conditional updates. Retrying returns false
   without changing the first operator or timestamp.
-- No refund/cancellation, gateway integration, stock inventory or event enrollment
-  workflow is included. Add these once their business rules are defined.
+- No refund/cancellation, gateway integration or stock inventory workflow is included. Add these once their business rules are defined.
 
 ## Call from Vaadin views
 
@@ -45,16 +49,16 @@ Inject PlayerBenefitsService in each view constructor and retain it as a field.
 Examples below are server-side calls, not HTTP endpoints.
 
 ```java
-// AdminHomeView: example setup, create once (do not run on every navigation).
-String eventId = service.createEvent("Tournament", 50000, 2, "Refreshment");
+// Admin setup (Players and Benefits > Benefit settings in the UI).
+service.updateSettings(50000, 2, "Refreshment");
 
 // OfficialHomeView: after independently checking a receipt/payment.
-var benefits = service.confirmPayment(eventId, "dijo", "UPI:receipt-123", 50000);
-boolean handedOverNow = service.handOverKit(eventId, "dijo");
-boolean redeemedNow = service.redeemCoupon(eventId, "dijo", couponCode);
+var benefits = service.confirmPayment("dijo", "UPI:receipt-123", 50000);
+boolean handedOverNow = service.handOverKit("dijo");
+boolean redeemedNow = service.redeemCoupon("dijo", couponCode);
 
 // PlayerHomeView: uses authenticated username; no player ID supplied by browser.
-var mine = service.myBenefits(eventId);
+var mine = service.myBenefits();
 boolean kitCollected = mine.kitHandedOverAt() != null;
 ```
 
@@ -62,8 +66,7 @@ An unpaid player's myBenefits call throws IllegalArgumentException; show a
 "Payment not confirmed" message. Catch business validation errors in your views
 and show a Notification. Unknown coupon and wrong ownership also produce a
 validation error. Authorization failures should remain access-denied errors.
-Persist/select the returned eventId in your UI. Use service.events() to populate
-an event selector. An ADMIN with ROLE_USER can also access myBenefits.
+An ADMIN with ROLE_USER can also access myBenefits.
 
 ## Payment gateway integration later
 

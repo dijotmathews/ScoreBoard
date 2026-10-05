@@ -1,19 +1,18 @@
-CREATE TABLE IF NOT EXISTS benefit_events (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
+-- Single row: the entry fee and the benefits every signed-up player receives.
+CREATE TABLE IF NOT EXISTS benefit_settings (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
     fee_paise INTEGER NOT NULL CHECK(fee_paise > 0),
     coupon_count INTEGER NOT NULL CHECK(coupon_count BETWEEN 0 AND 100),
     coupon_description TEXT NOT NULL
 );
+-- A confirmed entry payment signs a player up for the tournament (once per player).
 CREATE TABLE IF NOT EXISTS entry_payments (
     id TEXT PRIMARY KEY,
-    event_id TEXT NOT NULL REFERENCES benefit_events(id),
-    player_username TEXT NOT NULL REFERENCES users(username),
+    player_username TEXT NOT NULL UNIQUE REFERENCES users(username),
     payment_reference TEXT NOT NULL UNIQUE,
     amount_paise INTEGER NOT NULL CHECK(amount_paise > 0),
     confirmed_by TEXT NOT NULL REFERENCES users(username),
-    confirmed_at TEXT NOT NULL,
-    UNIQUE(event_id, player_username)
+    confirmed_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS welcome_kits (
     payment_id TEXT PRIMARY KEY REFERENCES entry_payments(id),

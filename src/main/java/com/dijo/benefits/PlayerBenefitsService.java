@@ -2,6 +2,7 @@ package com.dijo.benefits;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -10,6 +11,11 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Tournament sign-up and benefits. A confirmed entry payment signs a player up;
+ * every signed-up player gets one welcome kit and the configured coupons.
+ * Benefits are independent of events.
+ */
 @Service
 public class PlayerBenefitsService {
     private final JdbcTemplate jdbc;
@@ -18,47 +24,45 @@ public class PlayerBenefitsService {
         this.jdbc = jdbc;
     }
 
-    public record Event(String id, String name, long feePaise,
-                        int couponCount, String couponDescription) {}
+    /** Entry fee and the benefits each signed-up player receives. */
+    public record BenefitSettings(long feePaise, int couponCount, String couponDescription) {}
     public record Coupon(String code, String description, String redeemedAt) {}
-    public record Benefits(String paymentId, String eventId, String playerUsername,
+    public record Benefits(String paymentId, String playerUsername,
                            String paymentReference, long amountPaise,
                            String confirmedAt, String kitHandedOverAt,
                            List<Coupon> coupons) {}
 
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OFFICIAL', 'USER')")
+    public Optional<BenefitSettings> settings() {
+        return jdbc.query("SELECT * FROM benefit_settings WHERE id = 1",
+                (rs, row) -> new BenefitSettings(rs.getLong("fee_paise"),
+                        rs.getInt("coupon_count"), rs.getString("coupon_description")))
+                .stream().findFirst();
+    }
+
+    /** Fee and coupon changes apply to sign-ups confirmed after the update. */
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
-    public String createEvent(String name, long feePaise, int couponCount,
-                              String couponDescription) {
-        requireText(name, "Event name");
+    public void updateSettings(long feePaise, int couponCount, String couponDescription) {
         requireText(couponDescription, "Coupon description");
         if (feePaise <= 0 || couponCount < 0 || couponCount > 100) {
             throw new IllegalArgumentException("Invalid fee or coupon count");
         }
-        String id = UUID.randomUUID().toString();
         jdbc.update("""
-                INSERT INTO benefit_events
-                (id, name, fee_paise, coupon_count, coupon_description)
-                VALUES (?, ?, ?, ?, ?)
-                """, id, name, feePaise, couponCount, couponDescription);
-        return id;
-    }
-
-    @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyRole('ADMIN', 'OFFICIAL', 'USER')")
-    public List<Event> events() {
-        return jdbc.query("SELECT * FROM benefit_events ORDER BY name",
-                (rs, row) -> new Event(rs.getString("id"), rs.getString("name"),
-                        rs.getLong("fee_paise"), rs.getInt("coupon_count"),
-                        rs.getString("coupon_description")));
+                INSERT INTO benefit_settings(id, fee_paise, coupon_count, coupon_description)
+                VALUES (1, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET fee_paise = excluded.fee_paise,
+                    coupon_count = excluded.coupon_count,
+                    coupon_description = excluded.coupon_description
+                """, feePaise, couponCount, couponDescription);
     }
 
     /** Record an independently verified full payment; not a gateway verifier. */
     @Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'OFFICIAL')")
-    public Benefits confirmPayment(String eventId, String playerUsername,
-                                   String paymentReference, long amountPaise) {
-        requireText(eventId, "Event ID");
+    public Benefits confirmPayment(String playerUsername, String paymentReference,
+                                   long amountPaise) {
         requireText(playerUsername, "Player username");
         requireText(paymentReference, "Payment reference");
         if (amountPaise <= 0) throw new IllegalArgumentException("Invalid amount");
@@ -68,91 +72,111 @@ public class PlayerBenefitsService {
         String id = UUID.randomUUID().toString();
         int inserted = jdbc.update("""
                 INSERT INTO entry_payments
-                (id, event_id, player_username, payment_reference, amount_paise,
+                (id, player_username, payment_reference, amount_paise,
                  confirmed_by, confirmed_at)
-                SELECT ?, e.id, u.username, ?, ?, ?, ?
-                FROM benefit_events e JOIN users u ON u.username = ?
-                WHERE e.id = ? AND e.fee_paise = ? AND u.enabled = 1
+                SELECT ?, u.username, ?, ?, ?, ?
+                FROM users u JOIN benefit_settings s ON s.id = 1
+                WHERE u.username = ? AND s.fee_paise = ? AND u.enabled = 1
                 AND EXISTS (SELECT 1 FROM authorities a
                             WHERE a.username = u.username AND a.authority = 'ROLE_USER')
                 ON CONFLICT DO NOTHING
                 """, id, paymentReference, amountPaise, actor(), Instant.now().toString(),
-                playerUsername, eventId, amountPaise);
+                playerUsername, amountPaise);
 
         if (inserted == 0) {
             var previous = jdbc.query("""
-                    SELECT id FROM entry_payments WHERE event_id = ?
-                    AND player_username = ? AND payment_reference = ? AND amount_paise = ?
+                    SELECT id FROM entry_payments WHERE player_username = ?
+                    AND payment_reference = ? AND amount_paise = ?
                     """, (rs, row) -> rs.getString("id"),
-                    eventId, playerUsername, paymentReference, amountPaise);
+                    playerUsername, paymentReference, amountPaise);
             if (previous.size() == 1) return load(previous.getFirst());
+            if (settings().isEmpty()) {
+                throw new IllegalArgumentException("Set the entry fee in benefit settings first");
+            }
             throw new IllegalArgumentException(
-                    "Invalid event, enabled player, fee, or conflicting payment reference");
+                    "Invalid enabled player, fee, or conflicting payment reference");
         }
 
-        Event event = jdbc.queryForObject("SELECT * FROM benefit_events WHERE id = ?",
-                (rs, row) -> new Event(rs.getString("id"), rs.getString("name"),
-                        rs.getLong("fee_paise"), rs.getInt("coupon_count"),
-                        rs.getString("coupon_description")), eventId);
+        BenefitSettings settings = settings().orElseThrow();
         jdbc.update("INSERT INTO welcome_kits(payment_id) VALUES (?)", id);
-        for (int i = 0; i < event.couponCount(); i++) {
+        for (int i = 0; i < settings.couponCount(); i++) {
             jdbc.update("""
                     INSERT INTO player_coupons(code, payment_id, description)
                     VALUES (?, ?, ?)
-                    """, UUID.randomUUID().toString(), id, event.couponDescription());
+                    """, UUID.randomUUID().toString(), id, settings.couponDescription());
         }
+        return load(id);
+    }
+
+    /** Correct a confirmed payment; every update must carry a new transaction ID. */
+    @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
+    public Benefits updatePayment(String playerUsername, String newTransactionId,
+                                  long amountPaise) {
+        requireText(newTransactionId, "Transaction ID");
+        if (amountPaise <= 0) throw new IllegalArgumentException("Invalid amount");
+        String id = paymentId(playerUsername);
+        Integer taken = jdbc.queryForObject(
+                "SELECT count(*) FROM entry_payments WHERE payment_reference = ?",
+                Integer.class, newTransactionId);
+        if (taken != null && taken > 0) {
+            throw new IllegalArgumentException(
+                    "Transaction ID is already in use; enter a new transaction ID");
+        }
+        jdbc.update("UPDATE entry_payments SET payment_reference = ?, amount_paise = ? WHERE id = ?",
+                newTransactionId, amountPaise, id);
         return load(id);
     }
 
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('USER')")
-    public Benefits myBenefits(String eventId) {
-        return load(paymentId(eventId, actor()));
+    public Benefits myBenefits() {
+        return load(paymentId(actor()));
     }
 
     @Transactional(readOnly = true)
     @PreAuthorize("hasAnyRole('ADMIN', 'OFFICIAL')")
-    public Benefits playerBenefits(String eventId, String playerUsername) {
-        return load(paymentId(eventId, playerUsername));
+    public Benefits playerBenefits(String playerUsername) {
+        return load(paymentId(playerUsername));
     }
 
     /** true = handed over now; false = already handed over. */
     @Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'OFFICIAL')")
-    public boolean handOverKit(String eventId, String playerUsername) {
+    public boolean handOverKit(String playerUsername) {
         int changed = jdbc.update("""
                 UPDATE welcome_kits SET handed_over_at = ?, handed_over_by = ?
                 WHERE handed_over_at IS NULL AND payment_id IN
-                (SELECT id FROM entry_payments WHERE event_id = ? AND player_username = ?)
-                """, Instant.now().toString(), actor(), eventId, playerUsername);
+                (SELECT id FROM entry_payments WHERE player_username = ?)
+                """, Instant.now().toString(), actor(), playerUsername);
         if (changed == 1) return true;
-        paymentId(eventId, playerUsername); // Reject unpaid/nonexistent registration.
+        paymentId(playerUsername); // Reject players who have not signed up.
         return false;
     }
 
-    /** Check event and player ownership before consuming the coupon. */
+    /** Check player ownership before consuming the coupon. */
     @Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'OFFICIAL')")
-    public boolean redeemCoupon(String eventId, String playerUsername, String code) {
+    public boolean redeemCoupon(String playerUsername, String code) {
         requireText(code, "Coupon code");
         int changed = jdbc.update("""
                 UPDATE player_coupons SET redeemed_at = ?, redeemed_by = ?
                 WHERE code = ? AND redeemed_at IS NULL AND payment_id IN
-                (SELECT id FROM entry_payments WHERE event_id = ? AND player_username = ?)
-                """, Instant.now().toString(), actor(), code, eventId, playerUsername);
+                (SELECT id FROM entry_payments WHERE player_username = ?)
+                """, Instant.now().toString(), actor(), code, playerUsername);
         if (changed == 1) return true;
         Integer count = jdbc.queryForObject("""
                 SELECT count(*) FROM player_coupons c JOIN entry_payments p ON p.id = c.payment_id
-                WHERE c.code = ? AND p.event_id = ? AND p.player_username = ?
-                """, Integer.class, code, eventId, playerUsername);
-        if (count == null || count == 0) throw new IllegalArgumentException("Coupon not found for player/event");
+                WHERE c.code = ? AND p.player_username = ?
+                """, Integer.class, code, playerUsername);
+        if (count == null || count == 0) throw new IllegalArgumentException("Coupon not found for player");
         return false;
     }
 
-    private String paymentId(String eventId, String playerUsername) {
-        var ids = jdbc.query("SELECT id FROM entry_payments WHERE event_id = ? AND player_username = ?",
-                (rs, row) -> rs.getString("id"), eventId, playerUsername);
-        if (ids.isEmpty()) throw new IllegalArgumentException("No confirmed entry payment");
+    private String paymentId(String playerUsername) {
+        var ids = jdbc.query("SELECT id FROM entry_payments WHERE player_username = ?",
+                (rs, row) -> rs.getString("id"), playerUsername);
+        if (ids.isEmpty()) throw new IllegalArgumentException("Player has not signed up");
         return ids.getFirst();
     }
 
@@ -163,11 +187,10 @@ public class PlayerBenefitsService {
         public int couponsRemaining() { return couponsIssued - couponsRedeemed; }
     }
 
-    /** Player accounts (ROLE_USER, excluding staff), paid or unpaid for the event. */
+    /** Player accounts (ROLE_USER, excluding staff), signed up or not. */
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('ADMIN')")
-    public List<PlayerBenefitRow> listPlayerBenefits(String eventId) {
-        requireText(eventId, "Event ID");
+    public List<PlayerBenefitRow> listPlayerBenefits() {
         return jdbc.query("""
                 SELECT u.username, u.enabled, p.id AS payment_id,
                        p.payment_reference, COALESCE(p.amount_paise, 0) AS amount_paise,
@@ -175,7 +198,7 @@ public class PlayerBenefitsService {
                        COALESCE(c.issued, 0) AS coupons_issued,
                        COALESCE(c.redeemed, 0) AS coupons_redeemed
                 FROM users u
-                LEFT JOIN entry_payments p ON p.player_username = u.username AND p.event_id = ?
+                LEFT JOIN entry_payments p ON p.player_username = u.username
                 LEFT JOIN welcome_kits k ON k.payment_id = p.id
                 LEFT JOIN (
                     SELECT payment_id, COUNT(*) AS issued,
@@ -191,7 +214,7 @@ public class PlayerBenefitsService {
                 rs.getBoolean("enabled"), rs.getString("payment_id"),
                 rs.getString("payment_reference"), rs.getLong("amount_paise"),
                 rs.getString("handed_over_at"), rs.getInt("coupons_issued"),
-                rs.getInt("coupons_redeemed")), eventId);
+                rs.getInt("coupons_redeemed")));
     }
 
     private Benefits load(String id) {
@@ -201,7 +224,7 @@ public class PlayerBenefitsService {
         return jdbc.queryForObject("""
                 SELECT p.*, k.handed_over_at FROM entry_payments p
                 JOIN welcome_kits k ON k.payment_id = p.id WHERE p.id = ?
-                """, (rs, row) -> new Benefits(rs.getString("id"), rs.getString("event_id"),
+                """, (rs, row) -> new Benefits(rs.getString("id"),
                 rs.getString("player_username"), rs.getString("payment_reference"),
                 rs.getLong("amount_paise"), rs.getString("confirmed_at"),
                 rs.getString("handed_over_at"), coupons), id);
