@@ -10,12 +10,9 @@ import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.card.Card;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
-import com.vaadin.flow.router.RouterLink;
-import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
 import java.util.List;
 import java.util.Map;
@@ -35,18 +32,13 @@ public class PlayerMatchesView extends MobileHomeLayout {
     private final VerticalLayout events = new VerticalLayout();
     private Runnable unsubscribe;
 
-    public PlayerMatchesView(DrawService draws, MatchService matchService, EventUpdates updates,
-            AuthenticationContext authentication) {
+    public PlayerMatchesView(DrawService draws, MatchService matchService, EventUpdates updates) {
         super("My Matches");
         this.draws = draws;
         this.matchService = matchService;
         this.updates = updates;
         events.setPadding(false);
-        RouterLink home = new RouterLink("Player home", PlayerHomeView.class);
-        home.getStyle().set("white-space", "nowrap");
-        HorizontalLayout nav = new HorizontalLayout(home, new LogoutButton(authentication));
-        nav.setAlignItems(Alignment.BASELINE);
-        add(nav, new H3("My Events"), events);
+        add(new H3("My Events"), events);
         reload();
     }
 

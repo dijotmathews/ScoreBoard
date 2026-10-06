@@ -14,8 +14,6 @@ import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.data.value.ValueChangeMode;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
-import com.vaadin.flow.router.RouterLink;
-import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
 import java.math.BigDecimal;
 import java.util.List;
@@ -33,8 +31,7 @@ public class AdminPlayersView extends VerticalLayout {
     private List<PlayerBenefitRow> rows = List.of();
     private String feeText = "";
 
-    public AdminPlayersView(PlayerBenefitsService service, PlayerAccountService accounts,
-            AuthenticationContext authentication) {
+    public AdminPlayersView(PlayerBenefitsService service, PlayerAccountService accounts) {
         this.service = service;
         this.accounts = accounts;
         setSizeFull();
@@ -74,12 +71,7 @@ public class AdminPlayersView extends VerticalLayout {
             if (e.getValue() != null) openEditor(e.getValue());
         });
 
-        HorizontalLayout links = new HorizontalLayout(
-                new RouterLink("Admin home", AdminHomeView.class),
-                new RouterLink("Manage events", AdminEventsView.class),
-                new LogoutButton(authentication));
-        links.setAlignItems(Alignment.BASELINE);
-        add(new H1("Players and Benefits"), links, toolbar, summary, grid);
+        add(new H1("Players and Benefits"), toolbar, summary, grid);
         setFlexGrow(1, grid);
         reloadRows();
     }

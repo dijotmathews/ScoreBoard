@@ -3,7 +3,6 @@
     box-sizing: border-box;
     width: 100%;
     max-width: 480px;
-    min-height: 100dvh;
     margin-inline: auto;
 
     padding-top: max(16px, env(safe-area-inset-top));
@@ -30,4 +29,13 @@
 
 .mobile-home vaadin-button {
     min-height: 48px;
+}
+/* Wider page for tournament draws; the bracket scrolls sideways when needed. */
+.mobile-home.wide {
+    max-width: 1200px;
+}
+
+.bracket-scroll {
+    width: 100%;
+    overflow-x: auto;
 }

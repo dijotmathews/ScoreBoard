@@ -12,7 +12,10 @@ import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H1;
+import com.vaadin.flow.component.Html;
+import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.tabs.TabSheet;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
@@ -22,7 +25,6 @@ import com.vaadin.flow.router.HasDynamicTitle;
 import com.vaadin.flow.router.HasUrlParameter;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouterLink;
-import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
 import java.util.List;
 
@@ -40,15 +42,13 @@ public class AdminMatchesView extends VerticalLayout implements HasUrlParameter<
     private final H1 heading = new H1("Matches");
     private final Span summary = new Span();
     private final HorizontalLayout links = new HorizontalLayout();
-    private final LogoutButton logout;
     private final Grid<Match> grid = new Grid<>(Match.class, false);
+    private final Div bracket = new Div();
     private Event event;
     private List<String> officials = List.of();
 
-    public AdminMatchesView(EventService events, MatchService matches, EventUpdates updates,
-            AuthenticationContext authentication) {
+    public AdminMatchesView(EventService events, MatchService matches, EventUpdates updates) {
         this.updates = updates;
-        this.logout = new LogoutButton(authentication);
         links.setAlignItems(Alignment.BASELINE);
         this.events = events;
         this.matches = matches;
@@ -66,7 +66,7 @@ public class AdminMatchesView extends VerticalLayout implements HasUrlParameter<
         grid.addColumn(m -> statusText(m.status())).setHeader("Status").setAutoWidth(true);
         grid.addComponentColumn(m -> {
             Button result = new Button(m.status() == Match.Status.AWAITING_CONFIRMATION
-                    ? "Review" : "Result", e -> new MatchResultDialog(matches, m, true, this::reload).open());
+                    ? "Review" : "Result", e -> new MatchResultDialog(matches, updates, m, true, this::reload).open());
             result.addThemeVariants(ButtonVariant.SMALL);
             if (m.status() == Match.Status.AWAITING_CONFIRMATION) result.addThemeVariants(ButtonVariant.PRIMARY);
             result.setEnabled(m.ready());
@@ -74,17 +74,23 @@ public class AdminMatchesView extends VerticalLayout implements HasUrlParameter<
         }).setAutoWidth(true);
         grid.setSizeFull();
 
-        add(heading, links, summary, grid);
-        setFlexGrow(1, grid);
+        // Fill the tab and scroll both ways, so large draws are reachable on short screens.
+        bracket.addClassName("bracket-scroll");
+        bracket.setSizeFull();
+        bracket.getStyle().set("overflow", "auto");
+        TabSheet tabs = new TabSheet();
+        tabs.add("Matches", grid);
+        tabs.add("Draw", bracket);
+        tabs.setSizeFull();
+        add(heading, links, summary, tabs);
+        setFlexGrow(1, tabs);
     }
 
     @Override
     public void setParameter(BeforeEvent beforeEvent, String eventId) {
         event = events.event(eventId).orElse(null);
         links.removeAll();
-        links.add(new RouterLink("Manage events", AdminEventsView.class));
-        if (event != null) links.add(new RouterLink("Draw", AdminDrawView.class, event.id()));
-        links.add(logout);
+        if (event != null) links.add(new RouterLink("Edit draw", AdminDrawView.class, event.id()));
         reload();
     }
 
@@ -140,6 +146,7 @@ public class AdminMatchesView extends VerticalLayout implements HasUrlParameter<
             heading.setText("Matches");
             summary.setText("Event not found.");
             grid.setItems(List.of());
+            bracket.removeAll();
             return;
         }
         event = events.event(event.id()).orElse(event);
@@ -147,6 +154,8 @@ public class AdminMatchesView extends VerticalLayout implements HasUrlParameter<
         List<Match> all = matches.matches(event.id());
         officials = matches.officials();
         grid.setItems(all);
+        bracket.removeAll();
+        if (!all.isEmpty()) bracket.add(new Html(BracketSvg.render(all, null)));
         if (all.isEmpty()) {
             summary.setText("Lock the draw to create the matches.");
             return;

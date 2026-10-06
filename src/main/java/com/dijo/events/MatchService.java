@@ -3,6 +3,7 @@ package com.dijo.events;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -84,6 +85,14 @@ public class MatchService {
     public List<Match> myMatches() {
         return jdbc.query(SELECT + " WHERE m.official = ? ORDER BY e.name, m.round, m.match_no",
                 MATCH, actor());
+    }
+
+    /** The whole knockout of an event, for anyone signed in; empty until the draw is locked. */
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OFFICIAL', 'USER')")
+    public List<Match> bracket(String eventId) {
+        return jdbc.query(SELECT + " WHERE m.event_id = ? AND e.draw_locked = 1"
+                + " ORDER BY m.round, m.match_no", MATCH, eventId);
     }
 
     /** Matches the signed-in player plays in, across all events, in round order. */
@@ -189,6 +198,19 @@ public class MatchService {
                 WHERE event_id = ? AND round = ? AND match_no = ?
                 """, eventId, round, matchNo);
         updates.publish(eventId);
+    }
+
+    /**
+     * The latest state of one match, or empty if it no longer exists (e.g. the draw
+     * was unlocked). Officials can read only the matches they officiate.
+     */
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OFFICIAL')")
+    public Optional<Match> currentMatch(String eventId, int round, int matchNo) {
+        return jdbc.query(SELECT + " WHERE m.event_id = ? AND m.round = ? AND m.match_no = ?",
+                        MATCH, eventId, round, matchNo)
+                .stream().findFirst()
+                .filter(m -> isAdmin() || actor().equals(m.official()));
     }
 
     private Match match(String eventId, int round, int matchNo) {

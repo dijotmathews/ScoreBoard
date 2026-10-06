@@ -1,5 +1,6 @@
 package com.dijo.ui;
 
+import com.dijo.events.EventUpdates;
 import com.dijo.events.Match;
 import com.dijo.events.MatchService;
 import com.vaadin.flow.component.button.Button;
@@ -10,7 +11,6 @@ import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
-import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
 import java.util.List;
 
@@ -19,15 +19,15 @@ import java.util.List;
 @RolesAllowed("OFFICIAL")
 public class OfficialHomeView extends MobileHomeLayout {
     private final MatchService matches;
+    private final EventUpdates updates;
     private final VerticalLayout list = new VerticalLayout();
 
-    public OfficialHomeView(MatchService matches, AuthenticationContext authentication) {
+    public OfficialHomeView(MatchService matches, EventUpdates updates) {
         super("Official Home");
         this.matches = matches;
+        this.updates = updates;
         list.setPadding(false);
-        LogoutButton logout = new LogoutButton(authentication);
-        logout.setWidthFull();
-        add(logout, new H3("Matches I officiate"), list);
+        add(new H3("Matches I officiate"), list);
         reload();
     }
 
@@ -50,7 +50,7 @@ public class OfficialHomeView extends MobileHomeLayout {
         boolean canEnter = match.ready() && !match.byeMatch() && !match.confirmed();
         if (canEnter) {
             Button enter = new Button(match.winner() == null ? "Enter result" : "Update result",
-                    e -> new MatchResultDialog(matches, match, false, this::reload).open());
+                    e -> new MatchResultDialog(matches, updates, match, false, this::reload).open());
             enter.addThemeVariants(ButtonVariant.PRIMARY);
             card.addToFooter(enter);
         }

@@ -19,8 +19,6 @@ import com.vaadin.flow.router.BeforeEvent;
 import com.vaadin.flow.router.HasDynamicTitle;
 import com.vaadin.flow.router.HasUrlParameter;
 import com.vaadin.flow.router.Route;
-import com.vaadin.flow.router.RouterLink;
-import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
 import java.util.ArrayList;
 import java.util.List;
@@ -48,7 +46,7 @@ public class AdminDrawView extends VerticalLayout implements HasUrlParameter<Str
     private Event event;
     private List<String> unplaced = List.of();
 
-    public AdminDrawView(EventService events, DrawService draws, AuthenticationContext authentication) {
+    public AdminDrawView(EventService events, DrawService draws) {
         this.events = events;
         this.draws = draws;
         setSizeFull();
@@ -57,11 +55,6 @@ public class AdminDrawView extends VerticalLayout implements HasUrlParameter<Str
         lock.addThemeVariants(ButtonVariant.PRIMARY);
         viewMatches.addThemeVariants(ButtonVariant.PRIMARY);
         clear.addThemeVariants(ButtonVariant.ERROR, ButtonVariant.TERTIARY);
-        HorizontalLayout links = new HorizontalLayout(
-                new RouterLink("Manage events", AdminEventsView.class),
-                new RouterLink("Players and Benefits", AdminPlayersView.class),
-                new LogoutButton(authentication));
-        links.setAlignItems(Alignment.BASELINE);
 
         grid.addColumn(DrawSlot::slot).setHeader("Slot").setAutoWidth(true).setFlexGrow(0);
         grid.addComponentColumn(this::playerPicker).setHeader("Player").setFlexGrow(1);
@@ -78,7 +71,7 @@ public class AdminDrawView extends VerticalLayout implements HasUrlParameter<Str
         HorizontalLayout status = new HorizontalLayout(summary, lock, viewMatches, unlock, clear);
         status.setAlignItems(Alignment.CENTER);
         status.getStyle().set("flex-wrap", "wrap");
-        add(heading, links, status, grid);
+        add(heading, status, grid);
         setFlexGrow(1, grid);
     }
 

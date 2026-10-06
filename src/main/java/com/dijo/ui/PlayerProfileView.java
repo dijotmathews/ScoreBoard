@@ -6,11 +6,9 @@ import com.dijo.benefits.PlayerBenefitsService.Coupon;
 import com.vaadin.flow.component.card.Card;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
-import com.vaadin.flow.router.RouterLink;
 import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
 import java.time.Instant;
@@ -30,11 +28,7 @@ public class PlayerProfileView extends MobileHomeLayout {
     public PlayerProfileView(PlayerBenefitsService benefits, AuthenticationContext authentication) {
         super("My Profile");
         this.benefits = benefits;
-        RouterLink home = new RouterLink("Player home", PlayerHomeView.class);
-        home.getStyle().set("white-space", "nowrap");
-        HorizontalLayout nav = new HorizontalLayout(home, new LogoutButton(authentication));
-        nav.setAlignItems(Alignment.BASELINE);
-        add(nav, new Span("Signed in as " + authentication.getPrincipalName().orElse("")),
+        add(new Span("Signed in as " + authentication.getPrincipalName().orElse("")),
                 new H3("My Benefits"), benefitsCard());
     }
 

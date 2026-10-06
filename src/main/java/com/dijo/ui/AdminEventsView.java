@@ -7,12 +7,9 @@ import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.Span;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
-import com.vaadin.flow.router.RouterLink;
-import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
 import java.util.List;
 
@@ -24,18 +21,13 @@ public class AdminEventsView extends VerticalLayout {
     private final Grid<EventSummary> grid = new Grid<>(EventSummary.class, false);
     private final Span summary = new Span();
 
-    public AdminEventsView(EventService service, AuthenticationContext authentication) {
+    public AdminEventsView(EventService service) {
         this.service = service;
         setSizeFull();
         getStyle().set("box-sizing", "border-box");
 
         Button newEvent = new Button("New event", e -> openEditor(null));
         newEvent.addThemeVariants(ButtonVariant.PRIMARY);
-        HorizontalLayout links = new HorizontalLayout(
-                new RouterLink("Admin home", AdminHomeView.class),
-                new RouterLink("Players and Benefits", AdminPlayersView.class),
-                new LogoutButton(authentication));
-        links.setAlignItems(Alignment.BASELINE);
 
         grid.addColumn(s -> s.event().name()).setHeader("Event").setFrozen(true).setSortable(true);
         grid.addColumn(s -> s.event().contestantCount()).setHeader("Contestants");
@@ -48,7 +40,7 @@ public class AdminEventsView extends VerticalLayout {
             if (e.getValue() != null) openEditor(e.getValue());
         });
 
-        add(new H1("Manage Events"), links, newEvent, summary, grid);
+        add(new H1("Manage Events"), newEvent, summary, grid);
         setFlexGrow(1, grid);
         reload();
     }
