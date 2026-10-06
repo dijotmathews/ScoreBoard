@@ -5,15 +5,21 @@ import com.dijo.events.Match;
 import com.dijo.events.MatchService;
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.DetachEvent;
+import com.vaadin.flow.component.avatar.Avatar;
+import com.vaadin.flow.component.badge.Badge;
+import com.vaadin.flow.component.badge.BadgeVariant;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.dialog.Dialog;
+import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
+import com.vaadin.flow.component.radiobutton.RadioGroupVariant;
 import com.vaadin.flow.component.textfield.TextField;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -29,7 +35,7 @@ class MatchResultDialog extends Dialog {
     private final Runnable onChange;
 
     private final RadioButtonGroup<String> winner = new RadioButtonGroup<>("Winner");
-    private final TextField score = new TextField("Score (optional)");
+    private final TextField score = new TextField("Score");
     private final VerticalLayout body = new VerticalLayout();
     private Match match;
     private Runnable unsubscribe;
@@ -40,8 +46,11 @@ class MatchResultDialog extends Dialog {
         this.updates = updates;
         this.admin = admin;
         this.onChange = onChange;
-        setWidth("min(480px, 100vw)");
+        setWidth("min(520px, 100vw)");
+        addClassName("result-dialog");
+        winner.addThemeVariants(RadioGroupVariant.AURA_HORIZONTAL);
         score.setPlaceholder("e.g. 21-15, 18-21, 21-19");
+        score.setHelperText("Optional");
         score.setWidthFull();
         body.setPadding(false);
         add(body);
@@ -81,28 +90,34 @@ class MatchResultDialog extends Dialog {
     private void render(Match match) {
         this.match = match;
         body.removeAll();
+        getHeader().removeAll();
         getFooter().removeAll();
 
-        setHeaderTitle(match.eventName() + " • " + match.roundName() + ", match " + match.matchNo());
-        body.add(new Span(match.side1() + " vs " + match.side2()));
+        setHeaderTitle(match.roundName() + " · Match " + match.matchNo());
+        getHeader().add(statusBadge(match.status()));
+        body.add(PlayerUi.muted(match.eventName()), matchup(match));
 
         boolean editable = !match.confirmed() && !match.byeMatch() && match.ready();
         if (match.byeMatch()) {
-            body.add(new Span(match.winner() + " advances; the BYE is eliminated."));
+            body.add(PlayerUi.muted(match.winner() + " advances automatically; the BYE is eliminated."
+                    + (match.confirmed() ? "" : " Confirm to move them on.")));
         } else if (!match.ready()) {
-            body.add(new Span("Both players are not known yet."));
-        } else {
+            body.add(PlayerUi.muted("The players for this match are not known yet."));
+        } else if (editable) {
             winner.setItems(List.of(match.player1(), match.player2()));
             winner.setValue(match.winner());
-            winner.setReadOnly(!editable);
             score.setValue(match.score() == null ? "" : match.score());
-            score.setReadOnly(!editable);
             body.add(winner, score);
         }
+        String official = match.official() == null ? "Not assigned" : match.official();
+        List<String> details = new ArrayList<>(List.of("Official", official));
+        if (match.resultBy() != null) details.addAll(List.of("Result entered by", match.resultBy()));
+        if (!editable && match.score() != null) details.addAll(List.of("Score", match.score()));
+        body.add(PlayerUi.rows(details.toArray(String[]::new)));
         if (match.confirmed()) {
-            body.add(new Span("Confirmed. " + loser() + " is eliminated."));
-        } else if (match.resultBy() != null) {
-            body.add(new Span("Result entered by " + match.resultBy() + "; awaiting the admin's confirmation."));
+            body.add(PlayerUi.muted("Confirmed. " + loser() + " is eliminated."));
+        } else if (match.winner() != null && !match.byeMatch()) {
+            body.add(PlayerUi.muted("Waiting for the admin's confirmation."));
         }
 
         Button cancel = new Button("Close", e -> close());
@@ -132,6 +147,41 @@ class MatchResultDialog extends Dialog {
             reopen.getStyle().set("margin-inline-end", "auto");
             getFooter().addComponentAsFirst(reopen);
         }
+    }
+
+    /** Both sides with avatars; the winner, once known, gets a badge. */
+    private static Div matchup(Match match) {
+        Div matchup = new Div(side(match.side1(), match.player1() != null
+                        && match.player1().equals(match.winner())),
+                vs(), side(match.side2(), match.player2() != null && match.player2().equals(match.winner())));
+        matchup.addClassName("matchup");
+        return matchup;
+    }
+
+    private static Div side(String name, boolean won) {
+        Avatar avatar = new Avatar("BYE".equals(name) || "TBD".equals(name) ? null : name);
+        Span label = new Span(name);
+        label.addClassName("matchup-name");
+        Div side = new Div(avatar, label);
+        if (won) side.add(PlayerUi.badge("Winner", BadgeVariant.SUCCESS));
+        side.addClassName("matchup-side");
+        if (won) side.addClassName("won");
+        return side;
+    }
+
+    private static Span vs() {
+        Span vs = new Span("vs");
+        vs.addClassName("matchup-vs");
+        return vs;
+    }
+
+    private static Badge statusBadge(Match.Status status) {
+        return switch (status) {
+            case WAITING_FOR_PLAYERS -> PlayerUi.badge("Waiting");
+            case SCHEDULED -> PlayerUi.badge("To play");
+            case AWAITING_CONFIRMATION -> PlayerUi.badge("Awaiting confirmation", BadgeVariant.WARNING);
+            case CONFIRMED -> PlayerUi.badge("Confirmed", BadgeVariant.SUCCESS);
+        };
     }
 
     private void save(boolean thenConfirm) {

@@ -4,21 +4,25 @@ import com.dijo.events.DrawService;
 import com.dijo.events.DrawSlot;
 import com.dijo.events.Event;
 import com.dijo.events.EventService;
+import com.dijo.events.EventUpdates;
+import com.vaadin.flow.component.AttachEvent;
+import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
 import com.vaadin.flow.component.grid.Grid;
-import com.vaadin.flow.component.html.H1;
-import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.grid.GridVariant;
+import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.BeforeEvent;
 import com.vaadin.flow.router.HasDynamicTitle;
 import com.vaadin.flow.router.HasUrlParameter;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.router.RouterLink;
 import jakarta.annotation.security.RolesAllowed;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,43 +39,35 @@ public class AdminDrawView extends VerticalLayout implements HasUrlParameter<Str
 
     private final EventService events;
     private final DrawService draws;
-    private final H1 heading = new H1("Draw");
-    private final Span summary = new Span();
-    private final Button lock = new Button("Lock draw", e -> lockDraw());
-    private final Button unlock = new Button("Unlock draw", e -> confirmUnlock());
-    private final Button clear = new Button("Clear draw", e -> confirmClear());
-    private final Button viewMatches = new Button("View matches",
-            e -> getUI().ifPresent(ui -> ui.navigate(AdminMatchesView.class, this.event.id())));
+    private final EventUpdates updates;
+    private final Div header = new Div();
+    private final Div stats = new Div();
     private final Grid<DrawSlot> grid = new Grid<>(DrawSlot.class, false);
     private Event event;
     private List<String> unplaced = List.of();
+    private Runnable unsubscribe;
 
-    public AdminDrawView(EventService events, DrawService draws) {
+    public AdminDrawView(EventService events, DrawService draws, EventUpdates updates) {
         this.events = events;
         this.draws = draws;
+        this.updates = updates;
         setSizeFull();
         getStyle().set("box-sizing", "border-box");
 
-        lock.addThemeVariants(ButtonVariant.PRIMARY);
-        viewMatches.addThemeVariants(ButtonVariant.PRIMARY);
-        clear.addThemeVariants(ButtonVariant.ERROR, ButtonVariant.TERTIARY);
+        RouterLink back = new RouterLink("← All events", AdminEventsView.class);
+        back.addClassName("back-link");
+        header.setWidthFull();
+        stats.addClassName("stat-tiles");
 
         grid.addColumn(DrawSlot::slot).setHeader("Slot").setAutoWidth(true).setFlexGrow(0);
         grid.addComponentColumn(this::playerPicker).setHeader("Player").setFlexGrow(1);
-        grid.addComponentColumn(slot -> {
-            Button remove = new Button("Remove", e -> {
-                if (run(() -> draws.clearSlot(event.id(), slot.slot()))) reload();
-            });
-            remove.addThemeVariants(ButtonVariant.SMALL, ButtonVariant.TERTIARY);
-            remove.setEnabled(!slot.empty() && !event.drawLocked());
-            return remove;
-        }).setAutoWidth(true).setFlexGrow(0);
+        grid.addComponentColumn(this::removeButton).setAutoWidth(true).setFlexGrow(0);
+        // Shade every other first-round pair so each match reads as a unit.
+        grid.setPartNameGenerator(slot -> ((slot.slot() + 1) / 2) % 2 == 0 ? "match-alt" : null);
+        grid.addThemeVariants(GridVariant.NO_ROW_BORDERS);
         grid.setSizeFull();
 
-        HorizontalLayout status = new HorizontalLayout(summary, lock, viewMatches, unlock, clear);
-        status.setAlignItems(Alignment.CENTER);
-        status.getStyle().set("flex-wrap", "wrap");
-        add(heading, status, grid);
+        add(back, header, stats, grid);
         setFlexGrow(1, grid);
     }
 
@@ -86,6 +82,18 @@ public class AdminDrawView extends VerticalLayout implements HasUrlParameter<Str
         return event == null ? "Draw" : "Draw: " + event.name();
     }
 
+    @Override
+    protected void onAttach(AttachEvent attachEvent) {
+        unsubscribe = LiveReload.subscribe(attachEvent.getUI(), updates,
+                eventId -> event != null && eventId.equals(event.id()), this::reload);
+    }
+
+    @Override
+    protected void onDetach(DetachEvent detachEvent) {
+        if (unsubscribe != null) unsubscribe.run();
+        unsubscribe = null;
+    }
+
     private ComboBox<Choice> playerPicker(DrawSlot slot) {
         List<Choice> choices = new ArrayList<>();
         choices.add(Choice.BYE);
@@ -97,10 +105,11 @@ public class AdminDrawView extends VerticalLayout implements HasUrlParameter<Str
         picker.setItemLabelGenerator(Choice::label);
         picker.setValue(slot.bye() ? Choice.BYE
                 : slot.playerUsername() == null ? null : new Choice(slot.playerUsername()));
-        picker.setPlaceholder("Empty — choose a player or BYE");
+        picker.setPlaceholder("Choose a player or BYE");
         picker.setClearButtonVisible(true);
         picker.setReadOnly(event.drawLocked());
         picker.setWidthFull();
+        picker.getStyle().set("max-width", "420px");
         picker.setAriaLabel("Player for slot " + slot.slot());
         picker.addValueChangeListener(e -> {
             if (!e.isFromClient()) return;
@@ -114,19 +123,27 @@ public class AdminDrawView extends VerticalLayout implements HasUrlParameter<Str
         return picker;
     }
 
+    private Button removeButton(DrawSlot slot) {
+        Button remove = new Button(VaadinIcon.CLOSE_SMALL.create(), e -> {
+            if (run(() -> draws.clearSlot(event.id(), slot.slot()))) reload();
+        });
+        remove.addThemeVariants(ButtonVariant.SMALL, ButtonVariant.TERTIARY);
+        remove.setAriaLabel("Remove from slot " + slot.slot());
+        remove.setTooltipText("Remove");
+        remove.setEnabled(!slot.empty());
+        remove.setVisible(!event.drawLocked());  // nothing to remove once locked
+        return remove;
+    }
+
     private void reload() {
+        header.removeAll();
+        stats.removeAll();
         if (event == null) {
-            heading.setText("Draw");
-            summary.setText("Event not found.");
-            lock.setVisible(false);
-            unlock.setVisible(false);
-            clear.setVisible(false);
-            viewMatches.setVisible(false);
+            header.add(PlayerUi.pageHeader("Draw", "This event was not found."));
             grid.setItems(List.of());
             return;
         }
         event = events.event(event.id()).orElse(event);  // pick up lock changes
-        heading.setText("Draw: " + event.name());
         List<DrawSlot> slots = draws.draw(event.id());
         unplaced = draws.unplacedPlayers(event.id());
         grid.setItems(slots);
@@ -134,14 +151,32 @@ public class AdminDrawView extends VerticalLayout implements HasUrlParameter<Str
         long filled = slots.stream().filter(s -> !s.empty()).count();
         long byes = slots.stream().filter(DrawSlot::bye).count();
         boolean locked = event.drawLocked();
-        lock.setVisible(!locked);
-        unlock.setVisible(locked);
-        viewMatches.setVisible(locked);
-        clear.setVisible(!locked && filled > 0);
-        summary.setText((locked ? "Locked • " : "")
-                + filled + " of " + slots.size() + " slots filled"
-                + (byes > 0 ? " (" + byes + (byes == 1 ? " BYE)" : " BYEs)") : "")
-                + (locked ? "" : " • " + unplaced.size() + " signed-up players not yet placed"));
+        if (locked) {
+            Button unlock = new Button("Unlock", VaadinIcon.UNLOCK.create(), e -> confirmUnlock());
+            Button matches = new Button("View matches", VaadinIcon.ARROW_RIGHT.create(),
+                    e -> getUI().ifPresent(ui -> ui.navigate(AdminMatchesView.class, event.id())));
+            matches.setIconAfterText(true);
+            matches.addThemeVariants(ButtonVariant.PRIMARY);
+            header.add(PlayerUi.pageHeader("Draw: " + event.name(),
+                    "The draw is locked and its matches are created. Unlock it to make changes.",
+                    unlock, matches));
+        } else {
+            Button clear = new Button("Clear draw", e -> confirmClear());
+            clear.addThemeVariants(ButtonVariant.ERROR, ButtonVariant.TERTIARY);
+            clear.setVisible(filled > 0);
+            Button lock = new Button("Lock draw", VaadinIcon.LOCK.create(), e -> lockDraw());
+            lock.addThemeVariants(ButtonVariant.PRIMARY);
+            header.add(PlayerUi.pageHeader("Draw: " + event.name(),
+                    "Place a signed-up player or a BYE in every slot, then lock the draw.",
+                    clear, lock));
+        }
+
+        stats.add(PlayerUi.statTile("Status", locked ? "Locked" : "Open",
+                        locked ? "matches created" : filled == slots.size() ? "ready to lock" : "being filled"),
+                PlayerUi.statTile("Slots filled", String.valueOf(filled), "of " + slots.size() + " slots"),
+                PlayerUi.statTile("Players placed", String.valueOf(filled - byes), null),
+                PlayerUi.statTile("BYEs", String.valueOf(byes), null),
+                PlayerUi.statTile("Still to place", String.valueOf(unplaced.size()), "signed-up players"));
     }
 
     private void lockDraw() {

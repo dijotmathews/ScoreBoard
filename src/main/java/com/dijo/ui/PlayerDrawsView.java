@@ -10,6 +10,7 @@ import com.dijo.events.PlayerDraw;
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.Html;
+import com.vaadin.flow.component.badge.BadgeVariant;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.select.Select;
@@ -30,6 +31,9 @@ public class PlayerDrawsView extends MobileHomeLayout {
     private final String me;
     private final Select<Event> event = new Select<>();
     private final Div bracket = new Div();
+    private final Div status = new Div();
+    private final Span summary = new Span();
+    private final Span note = new Span("Your matches are highlighted.");
     private Runnable unsubscribe;
 
     public PlayerDrawsView(EventService events, DrawService draws, MatchService matches,
@@ -40,24 +44,28 @@ public class PlayerDrawsView extends MobileHomeLayout {
         this.updates = updates;
         this.me = authentication.getPrincipalName().orElse("");
 
-
         List<Event> all = events.events();
-        event.setLabel("Event");
+        event.setAriaLabel("Event");
         event.setItems(all);
         event.setItemLabelGenerator(Event::name);
-        event.getStyle().set("max-width", "360px");
         // Open on an event the player is in, if any.
         List<String> mine = draws.myDraws().stream().map(PlayerDraw::eventId).toList();
         event.setValue(all.stream().filter(e -> mine.contains(e.id())).findFirst()
                 .orElse(all.isEmpty() ? null : all.getFirst()));
         event.addValueChangeListener(e -> show());
 
-        // The page fits the window; the bracket fills the rest and scrolls both ways.
+        // Picker and status on one line, a summary below, then the bracket panel.
+        status.addClassName("draw-toolbar");
+        status.add(event);
+        summary.addClassName("muted");
+        note.addClassName("muted");
+        note.getStyle().set("font-size", "0.9em");
+
+        // The page fits the window; the bracket panel fills the rest and scrolls both ways.
         setHeightFull();
-        bracket.addClassName("bracket-scroll");
+        bracket.addClassNames("bracket-scroll", "bracket-panel");
         bracket.setWidthFull();
-        bracket.getStyle().set("overflow", "auto").set("min-height", "0");
-        add(event, bracket);
+        add(status, summary, bracket, note);
         setFlexGrow(1, bracket);
         show();
     }
@@ -76,16 +84,41 @@ public class PlayerDrawsView extends MobileHomeLayout {
 
     private void show() {
         bracket.removeAll();
+        status.getChildren().filter(c -> c != event).toList().forEach(status::remove);
+        summary.setText("");
+        note.setVisible(false);
         Event selected = event.getValue();
         if (selected == null) {
-            bracket.add(new Span("No events yet."));
+            bracket.add(emptyState("No events yet."));
             return;
         }
         List<Match> knockout = matches.bracket(selected.id());
         if (knockout.isEmpty()) {
-            bracket.add(new Span("The draw for " + selected.name() + " is not final yet."));
+            status.add(PlayerUi.badge("Draw not final", BadgeVariant.WARNING));
+            bracket.add(emptyState("The draw for " + selected.name()
+                    + " isn't final yet. It will appear here once the organisers lock it."));
             return;
         }
+
+        Match fin = knockout.getLast();
+        long played = knockout.stream().filter(Match::confirmed).count();
+        long players = knockout.stream().filter(m -> m.round() == 1)
+                .mapToLong(m -> (m.player1() != null ? 1 : 0) + (m.player2() != null ? 1 : 0)).sum();
+        if (fin.confirmed()) {
+            status.add(PlayerUi.badge("Complete", BadgeVariant.SUCCESS));
+            summary.setText("Champion: " + fin.winner() + " · " + players + " players");
+        } else {
+            status.add(PlayerUi.badge("In progress"));
+            summary.setText(players + " players · " + played + " of " + knockout.size() + " matches played");
+        }
+        boolean inDraw = knockout.stream().anyMatch(m -> me.equals(m.player1()) || me.equals(m.player2()));
+        note.setVisible(inDraw);
         bracket.add(new Html(BracketSvg.render(knockout, Objects.requireNonNull(me))));
+    }
+
+    private static Div emptyState(String text) {
+        Div empty = new Div(PlayerUi.muted(text));
+        empty.addClassName("bracket-empty");
+        return empty;
     }
 }

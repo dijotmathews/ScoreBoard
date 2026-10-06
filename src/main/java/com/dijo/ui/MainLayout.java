@@ -4,6 +4,7 @@ import com.vaadin.flow.component.applayout.AppLayout;
 import com.vaadin.flow.component.applayout.DrawerToggle;
 import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.Scroller;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -19,9 +20,14 @@ import jakarta.annotation.security.PermitAll;
 public class MainLayout extends AppLayout {
 
     public MainLayout(AuthenticationContext authentication) {
+        Icon logo = VaadinIcon.VAADIN_H.create();
+        logo.getStyle().set("margin-inline-start", "var(--vaadin-gap-m, 12px)")
+                .set("color", "var(--aura-accent-color)");
         H1 title = new H1("ScoreBoard");
-        title.getStyle().set("font-size", "1.125rem").set("margin", "0");
-        addToNavbar(new DrawerToggle(), title);
+        title.getStyle().set("font-size", "1.125rem").set("margin", "0 0 0 8px");
+        DrawerToggle toggle = new DrawerToggle();
+        toggle.getStyle().set("margin-inline", "auto var(--vaadin-gap-s, 8px)");  // push to the right
+        addToNavbar(logo, title, toggle);
 
         SideNav nav = new SideNav();
         if (authentication.hasAuthority("ROLE_ADMIN")) {

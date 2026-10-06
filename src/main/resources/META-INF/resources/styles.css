@@ -1,4 +1,36 @@
-/* Add your styles here */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+
+/* ScoreBoard theme (Aura) */
+html {
+  --aura-accent-color-dark: #FF8904;
+  --aura-accent-color-light: #FF8904;
+  --aura-background-color-dark: #1C1917;
+  --aura-background-color-light: #F4F4F0;
+  --aura-base-font-size: 13;
+  --aura-base-radius: 4;
+  --aura-content-color-scheme: light dark;
+  --aura-contrast-level: 0.25;
+  --aura-font-family: 'Inter', var(--aura-font-family-system);
+  --aura-notification-color-scheme: light dark;
+  --aura-overlay-surface-opacity: 1;
+  --aura-surface-level: -0.5;
+  color-scheme: light dark;
+}
+
+:is(vaadin-button, vaadin-menu-bar-button, vaadin-upload-button),
+vaadin-tabs,
+vaadin-checkbox,
+vaadin-radio-button {
+  --aura-accent-color-light: var(--aura-neutral);
+  --aura-accent-color-dark: var(--aura-neutral);
+}
+
+vaadin-side-nav-item[current]::part(content) {
+  --vaadin-side-nav-item-background: var(--vaadin-background-container);
+  --vaadin-side-nav-item-border-color: transparent;
+}
+
+/* App styles */
 .mobile-home {
     box-sizing: border-box;
     width: 100%;
@@ -38,4 +70,302 @@
 .bracket-scroll {
     width: 100%;
     overflow-x: auto;
+}
+
+/* Player profile */
+.profile-header {
+    display: flex;
+    align-items: center;
+    gap: var(--vaadin-gap-m);
+    flex-wrap: wrap;
+}
+
+.profile-name {
+    font-size: 1.25em;
+    font-weight: 600;
+}
+
+.detail-rows {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--vaadin-gap-s) var(--vaadin-gap-l);
+}
+
+.detail-rows > span {
+    overflow-wrap: anywhere;
+}
+
+.detail-label,
+.muted {
+    color: var(--vaadin-text-color-secondary);
+}
+
+.list-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vaadin-gap-m);
+    padding-block: var(--vaadin-padding-s);
+    border-top: 1px solid var(--vaadin-border-color-secondary);
+}
+
+.list-row:first-child {
+    border-top: none;
+    padding-top: 0;
+}
+
+.list-row.dim .list-row-text {
+    color: var(--vaadin-text-color-secondary);
+}
+
+.list-row-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.list-row-sub {
+    font-size: 0.9em;
+    color: var(--vaadin-text-color-secondary);
+}
+
+.list-row vaadin-badge {
+    flex-shrink: 0;
+}
+
+.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: 0.04em;
+}
+
+/* Event draws */
+.draw-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--vaadin-gap-m);
+    flex-wrap: wrap;
+}
+
+.draw-toolbar vaadin-select {
+    flex: 0 1 320px;
+    width: 320px;
+    min-width: 0;
+}
+
+.bracket-panel {
+    box-sizing: border-box;
+    min-height: 0;
+    overflow: auto;
+    padding: var(--vaadin-padding-m);
+    border: 1px solid var(--vaadin-border-color-secondary);
+    border-radius: var(--vaadin-radius-l);
+    background: var(--vaadin-background-color);
+}
+
+.bracket-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 160px;
+    text-align: center;
+    padding: var(--vaadin-padding-l);
+}
+
+/* Sign-in page */
+.login-page {
+    box-sizing: border-box;
+    padding: var(--vaadin-padding-l);
+}
+
+.login-card {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 380px;
+    padding: var(--vaadin-padding-xl) var(--vaadin-padding-l) var(--vaadin-padding-l);
+    border: 1px solid var(--vaadin-border-color-secondary);
+    border-radius: var(--vaadin-radius-l);
+    background: var(--vaadin-background-container);
+}
+
+.login-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--vaadin-gap-xs);
+    text-align: center;
+    margin-bottom: var(--vaadin-gap-m);
+}
+
+.login-logo {
+    --vaadin-icon-size: 36px;
+    color: var(--aura-accent-color);
+}
+
+.login-title {
+    font-size: 1.6em;
+    margin: var(--vaadin-gap-xs) 0 0;
+}
+
+.login-card vaadin-login-form {
+    width: 100%;
+}
+
+.login-help {
+    display: block;
+    text-align: center;
+    font-size: 0.9em;
+    margin-top: var(--vaadin-gap-s);
+}
+
+/* Compact buttons inside list rows (overrides the full-width mobile buttons). */
+.mobile-home .list-row vaadin-button {
+    width: auto;
+    min-height: 0;
+    flex-shrink: 0;
+}
+
+/* Admin page header, stat tiles and grid toolbar */
+.page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--vaadin-gap-m);
+    flex-wrap: wrap;
+    width: 100%;
+}
+
+.page-titles h1 {
+    margin: 0 0 var(--vaadin-gap-xs);
+}
+
+.page-actions {
+    display: flex;
+    gap: var(--vaadin-gap-s);
+    flex-wrap: wrap;
+}
+
+.stat-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--vaadin-gap-m);
+    width: 100%;
+}
+
+.stat-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--vaadin-padding-m);
+    border: 1px solid var(--vaadin-border-color-secondary);
+    border-radius: var(--vaadin-radius-l);
+    background: var(--vaadin-background-container);
+}
+
+.stat-label {
+    color: var(--vaadin-text-color-secondary);
+}
+
+.stat-value {
+    font-size: 1.75em;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--vaadin-text-color);
+}
+
+.stat-tile .muted {
+    font-size: 0.9em;
+}
+
+.grid-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--vaadin-gap-s);
+    flex-wrap: wrap;
+    width: 100%;
+}
+
+.grid-toolbar vaadin-text-field {
+    flex: 1 1 220px;
+    max-width: 320px;
+}
+
+.grid-toolbar .muted {
+    margin-inline-start: auto;
+}
+
+.player-cell {
+    display: flex;
+    align-items: center;
+    gap: var(--vaadin-gap-s);
+}
+
+.filled-cell {
+    display: flex;
+    align-items: center;
+    gap: var(--vaadin-gap-s);
+}
+
+.filled-cell vaadin-progress-bar {
+    margin: 0;
+}
+
+.row-actions {
+    display: flex;
+    gap: var(--vaadin-gap-xs);
+}
+
+/* Admin draw page */
+.back-link {
+    font-size: 0.9em;
+    color: var(--vaadin-text-color-secondary);
+    text-decoration: none;
+}
+
+.back-link:hover {
+    color: var(--vaadin-text-color);
+}
+
+/* Every other first-round pair is shaded so each match reads as a unit. */
+vaadin-grid::part(match-alt) {
+    background: var(--vaadin-background-container);
+}
+
+/* Match result dialog */
+.matchup {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: start;
+    gap: var(--vaadin-gap-m);
+    width: 100%;
+    box-sizing: border-box;
+    padding: var(--vaadin-padding-m);
+    border: 1px solid var(--vaadin-border-color-secondary);
+    border-radius: var(--vaadin-radius-l);
+    background: var(--vaadin-background-container);
+}
+
+.matchup-side {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--vaadin-gap-xs);
+    text-align: center;
+    min-width: 0;
+}
+
+.matchup-name {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.matchup-vs {
+    align-self: center;
+    color: var(--vaadin-text-color-secondary);
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.result-dialog vaadin-radio-group {
+    width: 100%;
 }

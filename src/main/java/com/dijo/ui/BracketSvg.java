@@ -8,8 +8,8 @@ import java.util.Locale;
  * Draws a knockout bracket as SVG, in the style of a printed tournament draw:
  * round 1 lists every slot on a line, each match is joined by a bracket line,
  * and the confirmed winner moves to a line in the next column with the score
- * beneath it. The final column shows the champion. Uses currentColor so it
- * follows the theme (light or dark).
+ * beneath it. The final column shows the champion. Colours come from the theme's
+ * CSS properties (with currentColor as fallback), so it follows light and dark mode.
  */
 final class BracketSvg {
     private static final int ROW = 40;           // vertical space per round-1 slot
@@ -17,6 +17,9 @@ final class BracketSvg {
     private static final int FIRST_COLUMN = 200;
     private static final int COLUMN = 170;
     private static final int MAX_NAME = 24;
+    private static final String LINE = "stroke: var(--vaadin-text-color-secondary, currentColor)";
+    private static final String SECONDARY = "fill: var(--vaadin-text-color-secondary, currentColor)";
+    private static final String ACCENT = "fill: var(--aura-accent-color, currentColor)";
 
     private BracketSvg() {}
 
@@ -69,8 +72,8 @@ final class BracketSvg {
                 double[] next = new double[entries / 2];
                 for (int k = 0; k < entries; k += 2) {
                     svg.append(String.format(Locale.ROOT,
-                            "<line x1='%d' y1='%.1f' x2='%d' y2='%.1f' stroke='currentColor' stroke-width='1'/>",
-                            x + w, y[k], x + w, y[k + 1]));
+                            "<line x1='%d' y1='%.1f' x2='%d' y2='%.1f' style='%s' stroke-width='1'/>",
+                            x + w, y[k], x + w, y[k + 1], LINE));
                     next[k / 2] = (y[k] + y[k + 1]) / 2;
                 }
                 y = next;
@@ -81,32 +84,34 @@ final class BracketSvg {
     }
 
     private static void header(StringBuilder svg, int x, String label) {
-        svg.append("<text x='").append(x + 4).append("' y='18' font-weight='600' fill='currentColor'>")
-                .append(escape(label)).append("</text>");
+        svg.append("<text x='").append(x + 4).append("' y='18' font-size='11' font-weight='600'")
+                .append(" letter-spacing='0.06em' style='").append(SECONDARY).append("'>")
+                .append(escape(label.toUpperCase(Locale.ROOT))).append("</text>");
     }
 
     private static void line(StringBuilder svg, int x, double y, int w) {
         svg.append(String.format(Locale.ROOT,
-                "<line x1='%d' y1='%.1f' x2='%d' y2='%.1f' stroke='currentColor' stroke-width='1'/>",
-                x, y, x + w, y));
+                "<line x1='%d' y1='%.1f' x2='%d' y2='%.1f' style='%s' stroke-width='1'/>",
+                x, y, x + w, y, LINE));
     }
 
     private static void text(StringBuilder svg, int x, double y, String value, boolean muted, boolean bold) {
-        svg.append(String.format(Locale.ROOT, "<text x='%d' y='%.1f' fill='currentColor'%s%s>",
-                        x, y, muted ? " opacity='0.55' font-style='italic'" : "",
-                        bold ? " font-weight='700'" : ""))
+        String style = muted ? " font-style='italic' style='" + SECONDARY + "'"
+                : bold ? " font-weight='700' style='" + ACCENT + "'" : " fill='currentColor'";
+        svg.append(String.format(Locale.ROOT, "<text x='%d' y='%.1f'%s>", x, y, style))
                 .append(escape(shorten(value))).append("</text>");
     }
 
     private static void small(StringBuilder svg, int x, double y, String value) {
         svg.append(String.format(Locale.ROOT,
-                        "<text x='%d' y='%.1f' fill='currentColor' opacity='0.75' font-size='12'>", x, y))
+                        "<text x='%d' y='%.1f' font-size='12' style='%s'>", x, y, SECONDARY))
                 .append(escape(shorten(value))).append("</text>");
     }
 
     private static void champion(StringBuilder svg, int x, double y) {
         svg.append(String.format(Locale.ROOT,
-                "<text x='%d' y='%.1f' fill='currentColor' font-weight='700'>CHAMPION</text>", x, y));
+                "<text x='%d' y='%.1f' font-size='11' font-weight='700' letter-spacing='0.06em' style='%s'>CHAMPION</text>",
+                x, y, ACCENT));
     }
 
     private static String shorten(String value) {

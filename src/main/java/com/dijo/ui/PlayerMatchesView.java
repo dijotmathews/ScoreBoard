@@ -1,5 +1,11 @@
 package com.dijo.ui;
 
+import static com.dijo.ui.PlayerUi.badge;
+import static com.dijo.ui.PlayerUi.card;
+import static com.dijo.ui.PlayerUi.listRow;
+import static com.dijo.ui.PlayerUi.muted;
+import static com.dijo.ui.PlayerUi.rows;
+
 import com.dijo.events.DrawService;
 import com.dijo.events.EventUpdates;
 import com.dijo.events.Match;
@@ -7,7 +13,10 @@ import com.dijo.events.MatchService;
 import com.dijo.events.PlayerDraw;
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.DetachEvent;
+import com.vaadin.flow.component.badge.Badge;
+import com.vaadin.flow.component.badge.BadgeVariant;
 import com.vaadin.flow.component.card.Card;
+import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -58,7 +67,7 @@ public class PlayerMatchesView extends MobileHomeLayout {
         events.removeAll();
         List<PlayerDraw> mine = draws.myDraws();
         if (mine.isEmpty()) {
-            events.add(new Span("You have not been placed in any event draw yet."));
+            events.add(muted("You have not been placed in any event draw yet."));
         }
         Map<String, List<Match>> matchesByEvent = matchService.myPlayerMatches().stream()
                 .collect(Collectors.groupingBy(Match::eventId));
@@ -67,24 +76,31 @@ public class PlayerMatchesView extends MobileHomeLayout {
     }
 
     private Card eventCard(PlayerDraw draw, List<Match> path) {
-        Card card = new Card();
-        card.setWidthFull();
-        card.setTitle(draw.eventName());
         if (!draw.drawLocked() || path.isEmpty()) {
-            card.setSubtitle("Slot " + draw.slot() + " • Draw not final yet");
-            card.add(new Span(draw.opponentBye() ? "First match: BYE"
-                    : draw.opponent() == null ? "First opponent not drawn yet"
-                    : "First opponent: " + draw.opponent()));
+            Card card = card(draw.eventName(), badge("Draw not final", BadgeVariant.WARNING));
+            card.add(rows("Slot", String.valueOf(draw.slot()),
+                    "First opponent", draw.opponentBye() ? "BYE"
+                            : draw.opponent() == null ? "Not drawn yet" : draw.opponent()));
             return card;
         }
 
         String me = myName(path.getFirst(), draw.slot());
-        card.setSubtitle(progress(path, me));
-        VerticalLayout rounds = new VerticalLayout();
-        rounds.setPadding(false);
-        rounds.setSpacing(false);
-        path.forEach(match -> rounds.add(matchLine(match, me)));
-        card.add(rounds);
+        Match last = path.getLast();
+        Card card;
+        if (eliminated(path, me)) {
+            card = card(draw.eventName(), badge("Eliminated", BadgeVariant.ERROR));
+            String round = last.roundName();
+            card.setSubtitle("Lost in " + (round.startsWith("Round") ? round : "the " + round));
+        } else if (last.confirmed() && last.round() == last.totalRounds()) {
+            card = card(draw.eventName(), badge("Champion", BadgeVariant.SUCCESS, BadgeVariant.FILLED));
+            card.setSubtitle("Won the final");
+        } else {
+            card = card(draw.eventName(), badge("Still in", BadgeVariant.SUCCESS));
+            card.setSubtitle("Next: " + last.roundName());
+        }
+        Div list = PlayerUi.list();
+        path.forEach(match -> list.add(matchRow(match, me)));
+        card.add(list);
         return card;
     }
 
@@ -93,36 +109,33 @@ public class PlayerMatchesView extends MobileHomeLayout {
         return slot % 2 == 1 ? first.player1() : first.player2();
     }
 
-    /** "Champion", "Eliminated in …", or "Still in: …" based on confirmed results only. */
-    private static String progress(List<Match> path, String me) {
+    /** True once a confirmed result has knocked this player out (path: their matches, in order). */
+    static boolean eliminated(List<Match> path, String me) {
         Match last = path.getLast();
-        if (last.confirmed() && !me.equals(last.winner())) return "Eliminated in the " + last.roundName();
-        if (last.confirmed() && last.round() == last.totalRounds()) return "Champion";
-        if (last.confirmed()) return "Through to the next round";
-        return "Still in: " + last.roundName();
+        return last.confirmed() && !me.equals(last.winner());
     }
 
-    private static Span matchLine(Match match, String me) {
+    /** One round: opponent and score on the left, the outcome as a badge on the right. */
+    private static Div matchRow(Match match, String me) {
         String opponent = me.equals(match.player1()) ? match.side2() : match.side1();
-        String outcome;
+        String detail = match.roundName()
+                + (match.score() == null || match.byeMatch() ? "" : " · " + match.score());
+        Badge outcome;
         if (match.byeMatch()) {
-            outcome = match.confirmed() ? "advanced (BYE)" : "BYE; awaiting confirmation";
+            outcome = match.confirmed() ? badge("Advanced", BadgeVariant.SUCCESS)
+                    : badge("Awaiting confirmation", BadgeVariant.WARNING);
         } else if (match.confirmed()) {
-            boolean won = me.equals(match.winner());
-            outcome = (won ? "won" : "lost")
-                    + (match.score() == null ? "" : " (" + match.score() + ")")
-                    + (won ? "" : " — eliminated");
+            outcome = me.equals(match.winner()) ? badge("Won", BadgeVariant.SUCCESS)
+                    : badge("Lost", BadgeVariant.ERROR);
         } else if (match.winner() != null) {
-            outcome = "result awaiting confirmation";
+            outcome = badge("Awaiting confirmation", BadgeVariant.WARNING);
         } else if (!match.ready()) {
-            outcome = "waiting for the other match";
+            outcome = badge("Waiting for opponent");
         } else {
-            outcome = "to be played";
+            outcome = badge("To be played");
         }
-        Span line = new Span(match.roundName() + ": vs " + opponent + " — " + outcome);
-        if (match.confirmed() && !me.equals(match.winner())) {
-            line.getStyle().set("font-weight", "600");
-        }
-        return line;
+        Div row = listRow("vs " + opponent, new Span(detail), outcome);
+        if (match.confirmed() && !me.equals(match.winner())) row.addClassName("dim");
+        return row;
     }
 }
