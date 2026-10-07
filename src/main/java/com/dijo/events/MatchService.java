@@ -87,6 +87,17 @@ public class MatchService {
                 MATCH, actor());
     }
 
+    /** Confirmed and total match counts across all events. */
+    public record MatchTotals(int confirmed, int total) {}
+
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('ADMIN')")
+    public MatchTotals totals() {
+        return jdbc.queryForObject("""
+                SELECT count(confirmed_at) AS confirmed, count(*) AS total FROM matches
+                """, (rs, row) -> new MatchTotals(rs.getInt("confirmed"), rs.getInt("total")));
+    }
+
     /** The whole knockout of an event, for anyone signed in; empty until the draw is locked. */
     @Transactional(readOnly = true)
     @PreAuthorize("hasAnyRole('ADMIN', 'OFFICIAL', 'USER')")

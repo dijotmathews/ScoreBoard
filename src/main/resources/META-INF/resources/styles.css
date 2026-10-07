@@ -369,3 +369,121 @@ vaadin-grid::part(match-alt) {
 .result-dialog vaadin-radio-group {
     width: 100%;
 }
+
+/* Admin home section links */
+.home-links {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: var(--vaadin-gap-m);
+    width: 100%;
+    align-items: start;
+}
+
+.home-link {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--vaadin-gap-xs);
+    padding: var(--vaadin-padding-l);
+    border: 1px solid var(--vaadin-border-color-secondary);
+    border-radius: var(--vaadin-radius-l);
+    background:
+        radial-gradient(120% 80% at 100% 0%,
+            color-mix(in srgb, var(--aura-accent-color) 10%, transparent), transparent 60%),
+        var(--vaadin-background-container);
+    color: var(--vaadin-text-color);
+    text-decoration: none;
+    overflow: hidden;
+    transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.home-link:hover,
+.home-link:focus-visible {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--aura-accent-color) 55%, transparent);
+    box-shadow: 0 8px 24px -12px color-mix(in srgb, var(--aura-accent-color) 45%, transparent);
+}
+
+.home-link-icon {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    margin-bottom: var(--vaadin-gap-s);
+    background: color-mix(in srgb, var(--aura-accent-color) 16%, transparent);
+    color: var(--aura-accent-color);
+}
+
+.home-link-icon vaadin-icon {
+    --vaadin-icon-size: 20px;
+}
+
+.home-link-arrow {
+    position: absolute;
+    top: var(--vaadin-padding-l);
+    right: var(--vaadin-padding-l);
+    --vaadin-icon-size: 16px;
+    color: var(--aura-accent-color);
+    opacity: 0;
+    transform: translateX(-6px);
+    transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.home-link:hover .home-link-arrow,
+.home-link:focus-visible .home-link-arrow {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.home-link-title {
+    font-weight: 600;
+    font-size: 1.1em;
+}
+
+.home-link-chip {
+    position: absolute;
+    top: calc(var(--vaadin-padding-l) + 8px);
+    right: calc(var(--vaadin-padding-l) + 28px);
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.85em;
+    font-weight: 600;
+    background: color-mix(in srgb, var(--aura-accent-color) 14%, transparent);
+    color: var(--vaadin-text-color);
+}
+
+.home-meters {
+    display: grid;
+    gap: var(--vaadin-gap-m);
+    margin-top: var(--vaadin-gap-m);
+    padding-top: var(--vaadin-gap-m);
+    border-top: 1px solid var(--vaadin-border-color-secondary);
+}
+
+.home-meter-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--vaadin-gap-s);
+}
+
+.home-meter-value {
+    font-size: 1.25em;
+    font-weight: 600;
+}
+
+.home-meter vaadin-progress-bar {
+    margin: 4px 0 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .home-link,
+    .home-link-arrow {
+        transition: none;
+    }
+    .home-link:hover,
+    .home-link:focus-visible {
+        transform: none;
+    }
+}

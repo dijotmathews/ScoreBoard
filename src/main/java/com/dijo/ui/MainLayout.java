@@ -33,7 +33,8 @@ public class MainLayout extends AppLayout {
         if (authentication.hasAuthority("ROLE_ADMIN")) {
             nav.addItem(new SideNavItem("Admin home", AdminHomeView.class, VaadinIcon.HOME.create()),
                     new SideNavItem("Players and Benefits", AdminPlayersView.class, VaadinIcon.USERS.create()),
-                    new SideNavItem("Manage events", AdminEventsView.class, VaadinIcon.TROPHY.create()));
+                    new SideNavItem("Manage events", AdminEventsView.class, VaadinIcon.TROPHY.create()),
+                    new SideNavItem("Officials", AdminOfficialsView.class, VaadinIcon.CLIPBOARD_USER.create()));
         } else if (authentication.hasAuthority("ROLE_OFFICIAL")) {
             nav.addItem(new SideNavItem("Official home", OfficialHomeView.class, VaadinIcon.HOME.create()));
         } else if (authentication.hasAuthority("ROLE_USER")) {

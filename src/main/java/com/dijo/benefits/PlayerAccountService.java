@@ -23,11 +23,8 @@ public class PlayerAccountService {
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
     public void createPlayer(String username, String password, boolean enabled) {
-        if (username == null || !username.matches(USERNAME_PATTERN)) {
-            throw new IllegalArgumentException(
-                    "Username must be 3-32 letters, digits, '.', '_' or '-'");
-        }
-        requirePassword(password);
+        requireValidUsername(username);
+        requireValidPassword(password);
         int inserted = jdbc.update("""
                 INSERT INTO users(username, password, enabled) VALUES (?, ?, ?)
                 ON CONFLICT DO NOTHING
@@ -44,7 +41,7 @@ public class PlayerAccountService {
         requirePlayer(username);
         jdbc.update("UPDATE users SET enabled = ? WHERE username = ?", enabled ? 1 : 0, username);
         if (newPassword != null && !newPassword.isBlank()) {
-            requirePassword(newPassword);
+            requireValidPassword(newPassword);
             jdbc.update("UPDATE users SET password = ? WHERE username = ?",
                     encoder.encode(newPassword), username);
         }
@@ -84,7 +81,16 @@ public class PlayerAccountService {
         if (count == null || count == 0) throw new IllegalArgumentException("Player not found");
     }
 
-    private void requirePassword(String password) {
+    /** Username rule shared by every account type. */
+    public static void requireValidUsername(String username) {
+        if (username == null || !username.matches(USERNAME_PATTERN)) {
+            throw new IllegalArgumentException(
+                    "Username must be 3-32 letters, digits, '.', '_' or '-'");
+        }
+    }
+
+    /** Password rule shared by every account type. */
+    public static void requireValidPassword(String password) {
         if (password == null || password.length() < MIN_PASSWORD_LENGTH) {
             throw new IllegalArgumentException(
                     "Password must be at least " + MIN_PASSWORD_LENGTH + " characters");
