@@ -26,17 +26,28 @@ import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.select.Select;
 import com.vaadin.flow.component.tabs.TabSheet;
+import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.component.timepicker.TimePicker;
 import com.vaadin.flow.router.BeforeEvent;
 import com.vaadin.flow.router.HasDynamicTitle;
 import com.vaadin.flow.router.HasUrlParameter;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouterLink;
 import jakarta.annotation.security.RolesAllowed;
+import java.time.Duration;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 /**
  * Admin view of an event's knockout: assign officials, enter and confirm results.
  * Refreshes itself (server push) when results for this event change elsewhere.
+ * Court and time are typed in only to build a shareable schedule message; they are
+ * kept in this view instance and never saved.
  */
 @Route("admin/matches")
 @RolesAllowed("ADMIN")
@@ -71,6 +82,14 @@ public class AdminMatchesView extends VerticalLayout implements HasUrlParameter<
     private List<Match> all = List.of();
     private List<String> officials = List.of();
     private Runnable unsubscribe;
+    /** Court and time per match, keyed by "round-matchNo". In memory only, never persisted. */
+    private final Map<String, Slot> slots = new HashMap<>();
+
+    private record Slot(String court, LocalTime time) {
+        boolean isEmpty() { return (court == null || court.isBlank()) && time == null; }
+    }
+
+    private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
 
     public AdminMatchesView(EventService events, MatchService matches, EventUpdates updates) {
         this.events = events;
@@ -90,12 +109,16 @@ public class AdminMatchesView extends VerticalLayout implements HasUrlParameter<
         show.setAriaLabel("Show");
         show.addValueChangeListener(e -> applyFilter());
         showing.addClassName("muted");
-        Div toolbar = new Div(show, showing);
+        Button share = new Button("Share schedule", VaadinIcon.SHARE.create(), e -> shareSchedule());
+        share.setTooltipText("Build a message and a draw image with the courts and times entered below");
+        Div toolbar = new Div(show, share, showing);
         toolbar.addClassName("grid-toolbar");
 
         grid.addColumn(m -> m.roundName() + " · " + m.matchNo()).setHeader("Match").setAutoWidth(true);
         grid.addColumn(m -> m.side1() + " vs " + m.side2()).setHeader("Players").setFlexGrow(2);
         grid.addComponentColumn(this::officialCell).setHeader("Official").setWidth("200px").setFlexGrow(0);
+        grid.addComponentColumn(this::courtCell).setHeader("Court").setWidth("110px").setFlexGrow(0);
+        grid.addComponentColumn(this::timeCell).setHeader("Time").setWidth("140px").setFlexGrow(0);
         grid.addColumn(m -> m.winner() == null ? "—"
                 : m.winner() + (m.score() == null ? "" : " · " + m.score()))
                 .setHeader("Result").setFlexGrow(2);
@@ -192,6 +215,78 @@ public class AdminMatchesView extends VerticalLayout implements HasUrlParameter<
             reload();
         });
         return picker;
+    }
+
+    private static String key(Match m) {
+        return m.round() + "-" + m.matchNo();
+    }
+
+    private Slot slot(Match m) {
+        return slots.getOrDefault(key(m), new Slot(null, null));
+    }
+
+    private boolean schedulable(Match m) {
+        return !m.byeMatch() && !m.confirmed();
+    }
+
+    private Component courtCell(Match match) {
+        if (!schedulable(match)) return PlayerUi.muted("—");
+        TextField court = new TextField();
+        court.setValue(slot(match).court() == null ? "" : slot(match).court());
+        court.setPlaceholder("Court");
+        court.setWidthFull();
+        court.setAriaLabel("Court for " + match.roundName() + " match " + match.matchNo());
+        court.addValueChangeListener(e -> slots.put(key(match), new Slot(e.getValue(), slot(match).time())));
+        return court;
+    }
+
+    private Component timeCell(Match match) {
+        if (!schedulable(match)) return PlayerUi.muted("—");
+        TimePicker time = new TimePicker();
+        time.setStep(Duration.ofMinutes(15));
+        time.setValue(slot(match).time());
+        time.setPlaceholder("Time");
+        time.setWidthFull();
+        time.setAriaLabel("Time for " + match.roundName() + " match " + match.matchNo());
+        time.addValueChangeListener(e -> slots.put(key(match), new Slot(slot(match).court(), e.getValue())));
+        return time;
+    }
+
+    /**
+     * Opens a ready-to-send message listing every open match with a court or time
+     * entered, plus a picture of the draw with those courts and times on it.
+     */
+    private void shareSchedule() {
+        if (event == null || all.isEmpty()) {
+            Notification.show("Lock the draw to create the matches first", 4000, Notification.Position.MIDDLE);
+            return;
+        }
+        List<Match> scheduled = all.stream()
+                .filter(m -> schedulable(m) && !slot(m).isEmpty())
+                .sorted(Comparator.comparing((Match m) -> slot(m).time(),
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+        String text = null;
+        if (!scheduled.isEmpty()) {
+            StringBuilder b = new StringBuilder("*" + event.name() + " – Match schedule*\n");
+            for (Match m : scheduled) {
+                b.append("\n").append(m.roundName()).append(" ").append(m.matchNo()).append(": ")
+                        .append(m.side1()).append(" vs ").append(m.side2());
+                String where = slotLabel(slot(m));
+                if (where != null) b.append(" – ").append(where);
+            }
+            text = b.toString();
+        }
+        String svg = BracketSvg.image(all, event.name(), m -> schedulable(m) ? slotLabel(slot(m)) : null);
+        String file = event.name().replaceAll("[^A-Za-z0-9]+", "-").replaceAll("^-|-$", "") + "-draw.png";
+        new ShareMessageDialog("Share schedule", text, svg, file).open();
+    }
+
+    /** "Court 3 · 10:30 AM", "Court 3" or "10:30 AM"; null when neither is set. */
+    private static String slotLabel(Slot s) {
+        boolean hasCourt = s.court() != null && !s.court().isBlank();
+        if (!hasCourt) return s.time() == null ? null : s.time().format(TIME);
+        return "Court " + s.court().trim() + (s.time() == null ? "" : " · " + s.time().format(TIME));
     }
 
     private void reload() {

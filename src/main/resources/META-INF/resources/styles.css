@@ -487,3 +487,20 @@ vaadin-grid::part(match-alt) {
         transform: none;
     }
 }
+
+/* Share dialog: image preview and action buttons */
+.share-image-preview {
+    max-height: 60vh;
+    overflow: auto;
+    border: 1px solid var(--vaadin-border-color-secondary);
+    border-radius: var(--vaadin-radius-m);
+    background: #ffffff;
+}
+
+.share-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--vaadin-gap-s);
+    width: 100%;
+}
