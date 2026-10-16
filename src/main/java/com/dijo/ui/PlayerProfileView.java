@@ -13,14 +13,10 @@ import com.vaadin.flow.component.badge.BadgeVariant;
 import com.vaadin.flow.component.card.Card;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H3;
-import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
 /** The player's account and tournament benefits. */
@@ -28,9 +24,6 @@ import java.util.Locale;
 @PageTitle("My Profile")
 @RolesAllowed("USER")
 public class PlayerProfileView extends MobileHomeLayout {
-    private static final DateTimeFormatter WHEN =
-            DateTimeFormatter.ofPattern("d MMM yyyy, h:mm a").withZone(ZoneId.systemDefault());
-
     public PlayerProfileView(PlayerBenefitsService benefits, AuthenticationContext authentication) {
         super("My Profile");
         String me = authentication.getPrincipalName().orElse("");
@@ -59,13 +52,13 @@ public class PlayerProfileView extends MobileHomeLayout {
         payment.add(rows(
                 "Amount", PlayerEditorDialog.rupees(mine.amountPaise()),
                 "Transaction ID", mine.paymentReference(),
-                "Paid on", WHEN.format(Instant.parse(mine.confirmedAt()))));
+                "Paid on", PlayerUi.dateTime(mine.confirmedAt())));
 
         boolean collected = mine.kitHandedOverAt() != null;
         Card kit = card("Welcome kit", collected ? badge("Collected", BadgeVariant.SUCCESS)
                 : badge("Ready to collect", BadgeVariant.WARNING));
         kit.add(muted(collected
-                ? "Collected on " + WHEN.format(Instant.parse(mine.kitHandedOverAt())) + "."
+                ? "Collected on " + PlayerUi.dateTime(mine.kitHandedOverAt()) + "."
                 : "Show this page to an official to collect your kit."));
 
         long available = mine.coupons().stream().filter(c -> c.redeemedAt() == null).count();
@@ -84,11 +77,7 @@ public class PlayerProfileView extends MobileHomeLayout {
 
     private static Div couponRow(Coupon coupon) {
         boolean used = coupon.redeemedAt() != null;
-        // Short reference for the player; the full code is in the tooltip.
-        Span code = new Span(coupon.code().substring(0, 8).toUpperCase(Locale.ROOT));
-        code.addClassName("mono");
-        code.getElement().setAttribute("title", coupon.code());
-        Div row = listRow(coupon.description(), code, used ? badge("Redeemed", BadgeVariant.CONTRAST)
+        Div row = listRow(coupon.description(), PlayerUi.couponCode(coupon.code()), used ? badge("Redeemed", BadgeVariant.CONTRAST)
                 : badge("Available", BadgeVariant.SUCCESS));
         if (used) row.addClassName("dim");
         return row;

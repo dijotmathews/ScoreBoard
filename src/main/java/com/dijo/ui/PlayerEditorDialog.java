@@ -1,28 +1,38 @@
 package com.dijo.ui;
 
+import static com.dijo.ui.PlayerUi.badge;
+import static com.dijo.ui.PlayerUi.card;
+import static com.dijo.ui.PlayerUi.listRow;
+import static com.dijo.ui.PlayerUi.muted;
+import static com.dijo.ui.PlayerUi.rows;
+
 import com.dijo.benefits.PlayerAccountService;
 import com.dijo.benefits.PlayerBenefitsService;
 import com.dijo.benefits.PlayerBenefitsService.Benefits;
 import com.dijo.benefits.PlayerBenefitsService.Coupon;
 import com.dijo.benefits.PlayerBenefitsService.PlayerBenefitRow;
+import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.Text;
+import com.vaadin.flow.component.badge.BadgeVariant;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.card.Card;
 import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
-import com.vaadin.flow.component.grid.Grid;
+import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
-import com.vaadin.flow.component.orderedlayout.FlexComponent;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.BigDecimalField;
 import com.vaadin.flow.component.textfield.PasswordField;
 import com.vaadin.flow.component.textfield.TextField;
 import java.math.BigDecimal;
+import java.util.List;
 
 /** Create a player, or view/update/delete the selected one and manage their benefits. */
 class PlayerEditorDialog extends Dialog {
@@ -64,6 +74,7 @@ class PlayerEditorDialog extends Dialog {
 
         if (!creating) {
             benefitsPanel.setPadding(false);
+            benefitsPanel.addClassName("benefits-panel");
             add(benefitsPanel);
             renderBenefits();
         }
@@ -126,71 +137,65 @@ class PlayerEditorDialog extends Dialog {
         }
 
         if (current == null) {
-            var settings = benefits.settings().orElse(null);
-            if (settings == null) {
-                benefitsPanel.add(new Span(
-                        "Not signed up. Set the entry fee in Benefit settings to record payments."));
-                return;
-            }
-            TextField reference = new TextField("Transaction ID");
-            Button pay = new Button("Record payment " + rupees(settings.feePaise()), e -> {
-                if (run(() -> benefits.confirmPayment(player.username(),
-                        reference.getValue().strip(), settings.feePaise()))) {
-                    notify("Payment recorded; player signed up");
-                    changedBenefits();
-                }
-            });
-            HorizontalLayout payRow = new HorizontalLayout(reference, pay);
-            payRow.setAlignItems(FlexComponent.Alignment.END);
-            payRow.getStyle().set("flex-wrap", "wrap");
-            benefitsPanel.add(new Span("Not signed up: entry fee not paid."), payRow);
+            benefitsPanel.add(signUpCard());
             return;
         }
+        benefitsPanel.add(paymentCard(current), kitCard(current), couponsCard(current));
+    }
 
-        benefitsPanel.add(new Span("Signed up • Paid " + rupees(current.amountPaise())
-                + " • Transaction ID: " + current.paymentReference()));
-        benefitsPanel.add(paymentEditor(current));
-
-        if (current.kitHandedOverAt() == null) {
-            Button handOver = new Button("Hand over welcome kit", e -> {
-                if (run(() -> benefits.handOverKit(player.username()))) {
-                    notify("Welcome kit handed over");
-                    changedBenefits();
-                }
-            });
-            benefitsPanel.add(new HorizontalLayout(new Span("Welcome kit pending."), handOver));
-        } else {
-            benefitsPanel.add(new Span("Welcome kit collected at " + current.kitHandedOverAt()));
+    /** Not signed up: record a verified entry fee payment, which signs the player up. */
+    private Card signUpCard() {
+        Card card = card("Entry fee", badge("Not paid", BadgeVariant.WARNING));
+        var settings = benefits.settings().orElse(null);
+        if (settings == null) {
+            card.add(muted("Set the entry fee in Benefit settings to record payments."));
+            return card;
         }
+        TextField reference = new TextField("Transaction ID");
+        reference.setPlaceholder("e.g. UPI reference");
+        reference.setWidthFull();
+        Button pay = new Button("Record payment " + rupees(settings.feePaise()), e -> {
+            if (run(() -> benefits.confirmPayment(player.username(),
+                    reference.getValue().strip(), settings.feePaise()))) {
+                notify("Payment recorded; player signed up");
+                changedBenefits();
+            }
+        });
+        pay.addThemeVariants(ButtonVariant.PRIMARY);
+        card.add(muted("Record the payment once it has been verified. This signs the player up "
+                + "and issues their welcome kit and coupons."), fieldRow(reference, pay));
+        return card;
+    }
 
-        if (!current.coupons().isEmpty()) {
-            Grid<Coupon> coupons = new Grid<>(Coupon.class, false);
-            coupons.addColumn(Coupon::description).setHeader("Coupon").setAutoWidth(true);
-            coupons.addColumn(c -> c.redeemedAt() == null ? "Available" : "Redeemed")
-                    .setHeader("Status").setAutoWidth(true);
-            coupons.addComponentColumn(c -> {
-                Button redeem = new Button("Redeem", e -> {
-                    if (run(() -> benefits.redeemCoupon(player.username(), c.code()))) {
-                        notify("Coupon redeemed");
-                        changedBenefits();
-                    }
-                });
-                redeem.addThemeVariants(ButtonVariant.SMALL);
-                redeem.setEnabled(c.redeemedAt() == null);
-                return redeem;
-            });
-            coupons.setItems(current.coupons());
-            coupons.setAllRowsVisible(true);
-            benefitsPanel.add(coupons);
-        }
+    /** Paid: the payment details, with a correction form behind a button. */
+    private Card paymentCard(Benefits current) {
+        Card card = card("Entry fee", badge("Paid", BadgeVariant.SUCCESS));
+        card.add(rows(
+                "Amount", rupees(current.amountPaise()),
+                "Transaction ID", current.paymentReference(),
+                "Paid on", PlayerUi.dateTime(current.confirmedAt())));
+
+        Div editor = paymentEditor(current);
+        editor.setVisible(false);
+        Button correct = new Button("Correct payment", VaadinIcon.EDIT.create());
+        correct.addThemeVariants(ButtonVariant.SMALL, ButtonVariant.TERTIARY);
+        correct.addClickListener(e -> {
+            editor.setVisible(true);
+            correct.setVisible(false);
+        });
+        card.add(editor);
+        card.addToFooter(correct);
+        return card;
     }
 
     /** Updating a payment always requires a new transaction ID. */
-    private HorizontalLayout paymentEditor(Benefits current) {
+    private Div paymentEditor(Benefits current) {
         BigDecimalField amount = new BigDecimalField("Amount (₹)");
         amount.setValue(BigDecimal.valueOf(current.amountPaise(), 2));
+        amount.setWidth("8em");
         TextField transactionId = new TextField("New transaction ID");
-        transactionId.setHelperText("Required for every update");
+        transactionId.setHelperText("Required for every change");
+        transactionId.setWidthFull();
         Button update = new Button("Update payment", e -> {
             if (run(() -> benefits.updatePayment(player.username(),
                     transactionId.getValue().strip(), paise(amount.getValue())))) {
@@ -198,9 +203,73 @@ class PlayerEditorDialog extends Dialog {
                 changedBenefits();
             }
         });
-        HorizontalLayout row = new HorizontalLayout(amount, transactionId, update);
-        row.setAlignItems(FlexComponent.Alignment.END);
-        row.getStyle().set("flex-wrap", "wrap");
+        update.addThemeVariants(ButtonVariant.PRIMARY);
+        return fieldRow(amount, transactionId, update);
+    }
+
+    private Card kitCard(Benefits current) {
+        boolean collected = current.kitHandedOverAt() != null;
+        Card card = card("Welcome kit", collected ? badge("Collected", BadgeVariant.SUCCESS)
+                : badge("Ready to collect", BadgeVariant.WARNING));
+        if (collected) {
+            card.add(muted("Collected on " + PlayerUi.dateTime(current.kitHandedOverAt()) + "."));
+            return card;
+        }
+        Button handOver = new Button("Hand over kit", e -> {
+            if (run(() -> benefits.handOverKit(player.username()))) {
+                notify("Welcome kit handed over");
+                changedBenefits();
+            }
+        });
+        handOver.addThemeVariants(ButtonVariant.SMALL, ButtonVariant.PRIMARY);
+        Div list = PlayerUi.list();
+        list.add(listRow("Not collected yet", null, handOver));
+        card.add(list);
+        return card;
+    }
+
+    private Card couponsCard(Benefits current) {
+        List<Coupon> coupons = current.coupons();
+        long available = coupons.stream().filter(c -> c.redeemedAt() == null).count();
+        Card card = card("Coupons", badge(available + " of " + coupons.size() + " available",
+                available > 0 ? BadgeVariant.SUCCESS : BadgeVariant.CONTRAST));
+        if (coupons.isEmpty()) {
+            card.add(muted("No coupons were issued with this sign-up."));
+            return card;
+        }
+        Div list = PlayerUi.list();
+        for (Coupon c : coupons) list.add(couponRow(c));
+        card.add(list);
+        return card;
+    }
+
+    /** A coupon with its code; a Redeem button while available, else when it was used. */
+    private Div couponRow(Coupon coupon) {
+        boolean used = coupon.redeemedAt() != null;
+        Span sub = new Span(PlayerUi.couponCode(coupon.code()));
+        if (used) sub.add(new Text(" · redeemed " + PlayerUi.dateTime(coupon.redeemedAt())));
+        Component end;
+        if (used) {
+            end = badge("Redeemed", BadgeVariant.CONTRAST);
+        } else {
+            Button redeem = new Button("Redeem", e -> {
+                if (run(() -> benefits.redeemCoupon(player.username(), coupon.code()))) {
+                    notify("Coupon redeemed");
+                    changedBenefits();
+                }
+            });
+            redeem.addThemeVariants(ButtonVariant.SMALL);
+            end = redeem;
+        }
+        Div row = listRow(coupon.description(), sub, end);
+        if (used) row.addClassName("dim");
+        return row;
+    }
+
+    /** Fields and a button on one line, wrapping on narrow screens. */
+    private static Div fieldRow(Component... parts) {
+        Div row = new Div(parts);
+        row.addClassName("field-row");
         return row;
     }
 

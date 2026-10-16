@@ -92,17 +92,11 @@ public class DrawService {
         updates.publish(eventId);
     }
 
-    /** Gives a slot a BYE (no opponent). Both slots of a match cannot be BYEs. */
+    /** Gives a slot a BYE (no opponent). A draw may hold any number of BYEs. */
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
     public void assignBye(String eventId, int slot) {
         requireUnlocked(eventId);
-        Integer partnerBye = jdbc.queryForObject("""
-                SELECT count(*) FROM draw_slots WHERE event_id = ? AND slot = ? AND is_bye = 1
-                """, Integer.class, eventId, slot % 2 == 1 ? slot + 1 : slot - 1);
-        if (partnerBye != null && partnerBye > 0) {
-            throw new IllegalArgumentException("Both slots of a match cannot be BYEs");
-        }
         int changed = jdbc.update("""
                 UPDATE draw_slots SET player_username = NULL, is_bye = 1 WHERE event_id = ? AND slot = ?
                 """, eventId, slot);
@@ -132,8 +126,8 @@ public class DrawService {
     }
 
     /**
-     * Locks a complete draw (every slot holds a player or a BYE) and creates its
-     * knockout matches: adjacent slots meet in round 1.
+     * Locks a complete draw (every slot holds a player or a BYE, with at least two
+     * players) and creates its knockout matches: adjacent slots meet in round 1.
      */
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
@@ -145,6 +139,12 @@ public class DrawService {
         if (open != null && open > 0) {
             throw new IllegalArgumentException(open == 1 ? "1 slot is still empty; fill it with a player or a BYE"
                     : open + " slots are still empty; fill them with players or BYEs");
+        }
+        Integer players = jdbc.queryForObject(
+                "SELECT count(*) FROM draw_slots WHERE event_id = ? AND player_username IS NOT NULL",
+                Integer.class, eventId);
+        if (players == null || players < 2) {
+            throw new IllegalArgumentException("Place at least two players before locking the draw");
         }
         int changed = jdbc.update("UPDATE events SET draw_locked = 1 WHERE id = ? AND draw_locked = 0",
                 eventId);

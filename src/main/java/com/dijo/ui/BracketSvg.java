@@ -96,7 +96,9 @@ final class BracketSvg {
                     name = bye ? "BYE" : k % 2 == 0 ? m.player1() : m.player2();
                 } else {
                     Match produced = byRound[column][k];
-                    name = produced.confirmed() ? produced.winner() : null;
+                    // A match between two BYEs sends a BYE through.
+                    bye = produced.noMatch();
+                    name = bye ? "BYE" : produced.confirmed() ? produced.winner() : null;
                     if (produced.confirmed()) score = produced.byeMatch() ? "bye" : produced.score();
                     else score = note.apply(produced);
                 }

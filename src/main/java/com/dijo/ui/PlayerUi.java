@@ -8,10 +8,30 @@ import com.vaadin.flow.component.card.Card;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.Span;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 /** Small building blocks shared by the app's pages, styled in styles.css. */
 final class PlayerUi {
+    private static final DateTimeFormatter WHEN =
+            DateTimeFormatter.ofPattern("d MMM yyyy, h:mm a").withZone(ZoneId.systemDefault());
+
     private PlayerUi() {}
+
+    /** A stored ISO instant as e.g. "3 Oct 2026, 1:29 am". */
+    static String dateTime(String isoInstant) {
+        return WHEN.format(Instant.parse(isoInstant));
+    }
+
+    /** A coupon's short reference, with the full code in the tooltip. */
+    static Span couponCode(String code) {
+        Span span = new Span(code.substring(0, 8).toUpperCase(Locale.ROOT));
+        span.addClassName("mono");
+        span.getElement().setAttribute("title", code);
+        return span;
+    }
 
     /** Avatar, a heading text and the player's sign-up status. */
     static Div header(String username, String text, boolean signedUp) {

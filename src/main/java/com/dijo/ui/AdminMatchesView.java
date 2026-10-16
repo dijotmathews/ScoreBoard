@@ -79,6 +79,9 @@ public class AdminMatchesView extends VerticalLayout implements HasUrlParameter<
     private final Grid<Match> grid = new Grid<>(Match.class, false);
     private final Div bracket = new Div();
     private Event event;
+    /** Every match of the knockout, for drawing the bracket. */
+    private List<Match> knockout = List.of();
+    /** The matches to play: the knockout without those between two BYEs. */
     private List<Match> all = List.of();
     private List<String> officials = List.of();
     private Runnable unsubscribe;
@@ -174,6 +177,7 @@ public class AdminMatchesView extends VerticalLayout implements HasUrlParameter<
             case SCHEDULED -> badge("To play");
             case AWAITING_CONFIRMATION -> badge("Awaiting confirmation", BadgeVariant.WARNING);
             case CONFIRMED -> badge("Confirmed", BadgeVariant.SUCCESS);
+            case NO_MATCH -> badge("No match");
         };
     }
 
@@ -277,7 +281,7 @@ public class AdminMatchesView extends VerticalLayout implements HasUrlParameter<
             }
             text = b.toString();
         }
-        String svg = BracketSvg.image(all, event.name(), m -> schedulable(m) ? slotLabel(slot(m)) : null);
+        String svg = BracketSvg.image(knockout, event.name(), m -> schedulable(m) ? slotLabel(slot(m)) : null);
         String file = event.name().replaceAll("[^A-Za-z0-9]+", "-").replaceAll("^-|-$", "") + "-draw.png";
         new ShareMessageDialog("Share schedule", text, svg, file).open();
     }
@@ -295,14 +299,15 @@ public class AdminMatchesView extends VerticalLayout implements HasUrlParameter<
         bracket.removeAll();
         if (event == null) {
             header.add(PlayerUi.pageHeader("Matches", "This event was not found."));
-            all = List.of();
+            knockout = all = List.of();
             applyFilter();
             return;
         }
         event = events.event(event.id()).orElse(event);
         Button editDraw = new Button("Edit draw", VaadinIcon.EDIT.create(),
                 e -> getUI().ifPresent(ui -> ui.navigate(AdminDrawView.class, event.id())));
-        all = matches.matches(event.id());
+        knockout = matches.matches(event.id());
+        all = knockout.stream().filter(m -> !m.noMatch()).toList();
         officials = matches.officials();
 
         if (all.isEmpty()) {
@@ -314,7 +319,7 @@ public class AdminMatchesView extends VerticalLayout implements HasUrlParameter<
         header.add(PlayerUi.pageHeader("Matches: " + event.name(),
                 "Assign officials, review entered results and confirm them to advance the winners.",
                 editDraw));
-        bracket.add(new Html(BracketSvg.render(all, null)));
+        bracket.add(new Html(BracketSvg.render(knockout, null)));
 
         long confirmed = all.stream().filter(Match::confirmed).count();
         long awaiting = count(Match.Status.AWAITING_CONFIRMATION);

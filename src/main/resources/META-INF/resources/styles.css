@@ -504,3 +504,25 @@ vaadin-grid::part(match-alt) {
     gap: var(--vaadin-gap-s);
     width: 100%;
 }
+
+/* Fields with a button beside them, e.g. recording a payment */
+.field-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--vaadin-gap-s) var(--vaadin-gap-m);
+    margin-top: var(--vaadin-gap-m);
+}
+
+.field-row > vaadin-text-field {
+    flex: 1 1 200px;
+}
+
+/* Admin player dialog: space the benefits section from the account fields */
+.benefits-panel {
+    margin-top: var(--vaadin-gap-l);
+}
+
+.benefits-panel h3 {
+    margin: 0;
+}

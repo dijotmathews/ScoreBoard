@@ -98,7 +98,11 @@ class MatchResultDialog extends Dialog {
         body.add(PlayerUi.muted(match.eventName()), matchup(match));
 
         boolean editable = !match.confirmed() && !match.byeMatch() && match.ready();
-        if (match.byeMatch()) {
+        if (match.noMatch()) {
+            body.add(PlayerUi.muted("Both sides are BYEs, so this match is not played."));
+        } else if (match.byeMatch() && match.winner() == null) {
+            body.add(PlayerUi.muted("The player facing the BYE is not known yet; they will advance automatically."));
+        } else if (match.byeMatch()) {
             body.add(PlayerUi.muted(match.winner() + " advances automatically; the BYE is eliminated."
                     + (match.confirmed() ? "" : " Confirm to move them on.")));
         } else if (!match.ready()) {
@@ -128,7 +132,7 @@ class MatchResultDialog extends Dialog {
             if (!admin) save.addThemeVariants(ButtonVariant.PRIMARY);
             getFooter().add(save);
         }
-        if (admin && !match.confirmed() && match.ready()) {
+        if (admin && !match.confirmed() && match.ready() && !match.noMatch()) {
             // Confirming an entered result keeps who entered it, unless the admin edits it.
             Button confirm = new Button(match.winner() == null ? "Save & confirm" : "Confirm", e -> {
                 if (editable && changed()) save(true);
@@ -181,6 +185,7 @@ class MatchResultDialog extends Dialog {
             case SCHEDULED -> PlayerUi.badge("To play");
             case AWAITING_CONFIRMATION -> PlayerUi.badge("Awaiting confirmation", BadgeVariant.WARNING);
             case CONFIRMED -> PlayerUi.badge("Confirmed", BadgeVariant.SUCCESS);
+            case NO_MATCH -> PlayerUi.badge("No match");
         };
     }
 

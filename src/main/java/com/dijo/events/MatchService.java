@@ -43,32 +43,35 @@ public class MatchService {
 
     /**
      * Builds every match of the knockout from a complete draw: round 1 pairs adjacent
-     * slots, later rounds start empty. A player facing a BYE is entered as the winner
-     * and waits for the admin's confirmation. resultBy may be null (migrations).
+     * slots, later rounds start empty. A match between two BYEs is not played and sends
+     * a BYE to the next round. A player facing a BYE is entered as the winner and waits
+     * for the admin's confirmation. resultBy may be null (migrations).
      */
     public static void createBracket(JdbcTemplate jdbc, String eventId, String resultBy) {
         List<Map<String, Object>> slots = jdbc.queryForList(
                 "SELECT player_username, is_bye FROM draw_slots WHERE event_id = ? ORDER BY slot", eventId);
         String now = Instant.now().toString();
-        for (int m = 1; m <= slots.size() / 2; m++) {
-            String p1 = (String) slots.get(2 * m - 2).get("player_username");
-            String p2 = (String) slots.get(2 * m - 1).get("player_username");
-            boolean bye1 = ((Number) slots.get(2 * m - 2).get("is_bye")).intValue() == 1;
-            boolean bye2 = ((Number) slots.get(2 * m - 1).get("is_bye")).intValue() == 1;
-            String winner = bye1 ? p2 : bye2 ? p1 : null;
-            jdbc.update("""
-                    INSERT INTO matches(event_id, round, match_no, player1, player1_bye,
-                        player2, player2_bye, winner, result_by, result_at)
-                    VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, eventId, m, p1, bye1 ? 1 : 0, p2, bye2 ? 1 : 0, winner,
-                    winner == null ? null : resultBy, winner == null ? null : now);
+        // byes[i]: side i of the current round is a BYE; players are known only in round 1.
+        boolean[] byes = new boolean[slots.size()];
+        for (int i = 0; i < slots.size(); i++) {
+            byes[i] = ((Number) slots.get(i).get("is_bye")).intValue() == 1;
         }
-        int round = 2;
-        for (int count = slots.size() / 4; count >= 1; count /= 2, round++) {
-            for (int m = 1; m <= count; m++) {
-                jdbc.update("INSERT INTO matches(event_id, round, match_no) VALUES (?, ?, ?)",
-                        eventId, round, m);
+        for (int round = 1; byes.length >= 2; round++) {
+            boolean[] next = new boolean[byes.length / 2];
+            for (int m = 1; m <= byes.length / 2; m++) {
+                boolean bye1 = byes[2 * m - 2], bye2 = byes[2 * m - 1];
+                String p1 = round == 1 ? (String) slots.get(2 * m - 2).get("player_username") : null;
+                String p2 = round == 1 ? (String) slots.get(2 * m - 1).get("player_username") : null;
+                String winner = bye1 && !bye2 ? p2 : bye2 && !bye1 ? p1 : null;
+                jdbc.update("""
+                        INSERT INTO matches(event_id, round, match_no, player1, player1_bye,
+                            player2, player2_bye, winner, result_by, result_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, eventId, round, m, p1, bye1 ? 1 : 0, p2, bye2 ? 1 : 0, winner,
+                        winner == null ? null : resultBy, winner == null ? null : now);
+                next[m - 1] = bye1 && bye2;
             }
+            byes = next;
         }
     }
 
@@ -90,11 +93,13 @@ public class MatchService {
     /** Confirmed and total match counts across all events. */
     public record MatchTotals(int confirmed, int total) {}
 
+    /** Matches between two BYEs are not played, so they are not counted. */
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('ADMIN')")
     public MatchTotals totals() {
         return jdbc.queryForObject("""
                 SELECT count(confirmed_at) AS confirmed, count(*) AS total FROM matches
+                WHERE NOT (player1_bye = 1 AND player2_bye = 1)
                 """, (rs, row) -> new MatchTotals(rs.getInt("confirmed"), rs.getInt("total")));
     }
 
@@ -177,19 +182,29 @@ public class MatchService {
         Match match = match(eventId, round, matchNo);
         if (match.confirmed()) throw new IllegalArgumentException("The result is already confirmed");
         if (match.winner() == null) throw new IllegalArgumentException("No result has been entered yet");
+        String now = Instant.now().toString();
         jdbc.update("""
                 UPDATE matches SET confirmed_by = ?, confirmed_at = ?
                 WHERE event_id = ? AND round = ? AND match_no = ?
-                """, actor(), Instant.now().toString(), eventId, round, matchNo);
+                """, actor(), now, eventId, round, matchNo);
         if (round < match.totalRounds()) {
+            int next = (matchNo + 1) / 2;
             jdbc.update("UPDATE matches SET " + nextSide(matchNo)
                             + " = ? WHERE event_id = ? AND round = ? AND match_no = ?",
-                    match.winner(), eventId, round + 1, (matchNo + 1) / 2);
+                    match.winner(), eventId, round + 1, next);
+            // Facing a BYE there too: they go through, pending the admin's confirmation.
+            jdbc.update("""
+                    UPDATE matches SET winner = ?, result_by = ?, result_at = ?
+                    WHERE event_id = ? AND round = ? AND match_no = ? AND (player1_bye = 1 OR player2_bye = 1)
+                    """, match.winner(), actor(), now, eventId, round + 1, next);
         }
         updates.publish(eventId);
     }
 
-    /** Undoes a confirmation while the winner's next match has no result yet. */
+    /**
+     * Undoes a confirmation while the winner's next match has no result yet, other
+     * than going through against a BYE, which is undone with it.
+     */
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
     public void reopen(String eventId, int round, int matchNo) {
@@ -197,11 +212,12 @@ public class MatchService {
         if (!match.confirmed()) throw new IllegalArgumentException("The result is not confirmed");
         if (round < match.totalRounds()) {
             Match next = match(eventId, round + 1, (matchNo + 1) / 2);
-            if (next.winner() != null) {
+            if (next.confirmed() || (next.winner() != null && !next.byeMatch())) {
                 throw new IllegalArgumentException("The next-round match already has a result");
             }
-            jdbc.update("UPDATE matches SET " + nextSide(matchNo)
-                            + " = NULL WHERE event_id = ? AND round = ? AND match_no = ?",
+            jdbc.update("UPDATE matches SET " + nextSide(matchNo) + " = NULL, winner = NULL,"
+                            + " result_by = NULL, result_at = NULL"
+                            + " WHERE event_id = ? AND round = ? AND match_no = ?",
                     eventId, round + 1, next.matchNo());
         }
         jdbc.update("""

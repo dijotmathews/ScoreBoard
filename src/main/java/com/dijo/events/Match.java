@@ -1,8 +1,9 @@
 package com.dijo.events;
 
 /**
- * One knockout match. A side is a player, a BYE (round 1 only), or not known yet
- * (null player, not a BYE). The loser, or the BYE, is eliminated once the admin
+ * One knockout match. A side is a player, a BYE, or not known yet (null player,
+ * not a BYE). A BYE in a later round comes from a match between two BYEs, which is
+ * never played (noMatch). The loser, or the BYE, is eliminated once the admin
  * confirms the result.
  */
 public record Match(String eventId, String eventName, int totalRounds, int round, int matchNo,
@@ -10,9 +11,12 @@ public record Match(String eventId, String eventName, int totalRounds, int round
                     String official, String winner, String score,
                     String resultBy, String confirmedBy) {
 
-    public enum Status { WAITING_FOR_PLAYERS, SCHEDULED, AWAITING_CONFIRMATION, CONFIRMED }
+    public enum Status { WAITING_FOR_PLAYERS, SCHEDULED, AWAITING_CONFIRMATION, CONFIRMED, NO_MATCH }
 
     public boolean byeMatch() { return player1Bye || player2Bye; }
+
+    /** Both sides are BYEs: nothing is played, and a BYE goes through to the next round. */
+    public boolean noMatch() { return player1Bye && player2Bye; }
 
     /** Both sides decided: two players, or a player and a BYE. */
     public boolean ready() {
@@ -22,6 +26,7 @@ public record Match(String eventId, String eventName, int totalRounds, int round
     public boolean confirmed() { return confirmedBy != null; }
 
     public Status status() {
+        if (noMatch()) return Status.NO_MATCH;
         if (confirmed()) return Status.CONFIRMED;
         if (winner != null) return Status.AWAITING_CONFIRMATION;
         return ready() ? Status.SCHEDULED : Status.WAITING_FOR_PLAYERS;
