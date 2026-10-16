@@ -16,3 +16,4 @@ vite.generated.ts
 app.db
 
 .playwright-mcp
+.mcp.json
