@@ -41,6 +41,10 @@ class PlayerEditorDialogTest extends UiTest {
         return find(Badge.class).withText(text).exists();
     }
 
+    private String passwordOf(String username) {
+        return jdbc.queryForObject("SELECT password FROM users WHERE username = ?", String.class, username);
+    }
+
     private void type(String label, String value) {
         test(find(TextField.class).withLabel(label).single()).setValue(value);
     }
@@ -118,12 +122,14 @@ class PlayerEditorDialogTest extends UiTest {
     void creatingAPlayer() {
         navigate(AdminPlayersView.class);
         click("New player");
-        type("Username", "bob");
-        test(find(PasswordField.class).withLabel("Password").single()).setValue("Secret@123");
+        assertThat(find(PasswordField.class).exists()).isFalse();
+        type("Full name", "Dijo T Mathews");
+        assertThat(find(TextField.class).withLabel("Username").single().getValue()).isEqualTo("dijotmathews");
         click("Create");
 
-        assertThat(notifications()).contains("Player created");
+        assertThat(notifications()).contains("Player created. Username and initial password: dijotmathews");
         assertThat(test(find(Grid.class).single()).size()).isEqualTo(2);
+        assertThat(encoder.matches("dijotmathews", passwordOf("dijotmathews"))).isTrue();
     }
 
     @Test

@@ -100,7 +100,7 @@ public class OfficialHomeView extends MobileHomeLayout {
         for (Match m : list) {
             String detail = m.eventName() + " · " + m.roundName() + ", match " + m.matchNo()
                     + (m.winner() == null ? ""
-                            : " · " + m.winner() + " won" + (m.score() == null ? "" : " " + m.score()));
+                            : " · " + m.winnerName() + " won" + (m.score() == null ? "" : " " + m.score()));
             rows.add(listRow(m.side1() + " vs " + m.side2(), new Span(detail), end.apply(m)));
         }
         card.add(rows);

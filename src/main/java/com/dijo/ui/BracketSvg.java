@@ -36,7 +36,10 @@ final class BracketSvg {
 
     private BracketSvg() {}
 
-    /** matches: every match of one event, ordered by round and match number. */
+    /**
+     * matches: every match of one event, ordered by round and match number. highlight is
+     * the username of the player to emphasise, or null.
+     */
     static String render(List<Match> matches, String highlight) {
         return render(matches, highlight, null, m -> null);
     }
@@ -87,23 +90,26 @@ final class BracketSvg {
                     column == rounds ? "Champion" : byRound[column + 1][0].roundName());
             int entries = slots >> column;
             for (int k = 0; k < entries; k++) {
+                String player;
                 String name;
                 boolean bye = false;
                 String score = null;
                 if (column == 0) {
                     Match m = byRound[1][k / 2];
                     bye = k % 2 == 0 ? m.player1Bye() : m.player2Bye();
-                    name = bye ? "BYE" : k % 2 == 0 ? m.player1() : m.player2();
+                    player = bye ? null : k % 2 == 0 ? m.player1() : m.player2();
+                    name = bye ? "BYE" : k % 2 == 0 ? m.player1Name() : m.player2Name();
                 } else {
                     Match produced = byRound[column][k];
                     // A match between two BYEs sends a BYE through.
                     bye = produced.noMatch();
-                    name = bye ? "BYE" : produced.confirmed() ? produced.winner() : null;
+                    player = bye || !produced.confirmed() ? null : produced.winner();
+                    name = bye ? "BYE" : produced.confirmed() ? produced.winnerName() : null;
                     if (produced.confirmed()) score = produced.byeMatch() ? "bye" : produced.score();
                     else score = note.apply(produced);
                 }
                 line(svg, look, x, y[k], w);
-                if (name != null) text(svg, look, x + 4, y[k] - 7, name, bye, name.equals(highlight));
+                if (name != null) text(svg, look, x + 4, y[k] - 7, name, bye, player != null && player.equals(highlight));
                 if (score != null) small(svg, look, x + 4, y[k] + 15, score);
                 if (column == rounds && name != null) {
                     champion(svg, look, x + 4, y[k] + (score == null ? 18 : 34));

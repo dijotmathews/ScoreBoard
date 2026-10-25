@@ -379,6 +379,21 @@ vaadin-grid::part(match-alt) {
     align-items: start;
 }
 
+.home-section {
+    width: 100%;
+}
+
+.home-section-title {
+    margin: var(--vaadin-gap-m) 0 var(--vaadin-gap-s);
+}
+
+.home-remaining {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+    gap: var(--vaadin-gap-m);
+    align-items: start;
+}
+
 .home-link {
     position: relative;
     display: flex;

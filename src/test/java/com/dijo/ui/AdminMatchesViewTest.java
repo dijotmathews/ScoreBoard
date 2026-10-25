@@ -92,53 +92,102 @@ class AdminMatchesViewTest extends UiTest {
     }
 
     @Test
-    void sharesAMessageWithTheCourtsAndTimesInTimeOrder() {
+    void theSharedDrawShowsTheCourtsAndTimesEntered() {
         enter(2, null, LocalTime.of(16, 0));
         enter(0, "2", LocalTime.of(10, 30));
 
-        click("Share schedule");
+        click("Share draw");
 
         assertThat(find(TextArea.class).single().getValue()).isEqualTo("""
-                *Singles – Match schedule*
+                *Singles – Remaining matches*
 
-                Semi-final 1: ada vs bob – Court 2 · 10:30 AM
-                Final 1: TBD vs TBD – 4:00 PM""");
+                Semi-final
+                1. ada vs bob – Court 2 · 10:30 AM
+
+                Final
+                1. TBD vs TBD – 4:00 PM""");
     }
 
     @Test
-    void aCourtWithoutATimeIsStillShared() {
-        enter(0, " 5 ", null);
-        click("Share schedule");
-        assertThat(find(TextArea.class).single().getValue()).endsWith("Semi-final 1: ada vs bob – Court 5");
+    void thereIsNoSeparateScheduleButton() {
+        assertThat(find(Button.class).withText("Share schedule").exists()).isFalse();
     }
 
     @Test
-    void withNothingEnteredOnlyTheDrawImageIsOffered() {
-        click("Share schedule");
+    void sharesTheRemainingMatchesRoundByRound() {
+        click("Share draw");
 
+        // The BYE match is not played, so it is left out.
+        assertThat(find(TextArea.class).single().getValue()).isEqualTo("""
+                *Singles – Remaining matches*
+
+                Semi-final
+                1. ada vs bob
+
+                Final
+                1. TBD vs TBD""");
         TabSheet tabs = find(TabSheet.class).last();
         assertThat(test(tabs).getTab("Image")).isNotNull();
+    }
+
+    @Test
+    void theSharedDrawLeavesOutPlayedMatchesAndRounds() {
+        matches.recordResult(event, 1, 1, "ada", "21-15");
+        matches.confirmResult(event, 1, 1);
+        matches.confirmResult(event, 1, 2);
+        navigate(AdminMatchesView.class, event);
+
+        click("Share draw");
+
+        assertThat(find(TextArea.class).single().getValue()).isEqualTo("""
+                *Singles – Remaining matches*
+
+                Final
+                1. ada vs cy""");
+    }
+
+    @Test
+    void withEveryMatchPlayedOnlyTheDrawImageIsShared() {
+        matches.recordResult(event, 1, 1, "ada", "21-15");
+        matches.confirmResult(event, 1, 1);
+        matches.confirmResult(event, 1, 2);
+        matches.recordResult(event, 2, 1, "cy", "21-19");
+        matches.confirmResult(event, 2, 1);
+        navigate(AdminMatchesView.class, event);
+
+        click("Share draw");
+
         assertThat(find(TextArea.class).exists()).isFalse();
+        assertThat(test(find(TabSheet.class).last()).getTab("Image")).isNotNull();
         assertThat(find(Button.class).withText("Copy image").exists()).isTrue();
         assertThat(find(Button.class).withText("Download").exists()).isTrue();
     }
 
     @Test
-    void courtsAndTimesSurviveARefreshButAreNeverSaved() {
-        enter(0, "2", LocalTime.of(10, 30));
+    void aCourtWithoutATimeIsStillShared() {
+        enter(0, " 5 ", null);
+        click("Share draw");
+        assertThat(find(TextArea.class).single().getValue()).contains("\n1. ada vs bob – Court 5\n");
+    }
 
-        // Changing the filter rebuilds every row from the in-memory values.
-        @SuppressWarnings("unchecked")
-        Select<Object> show = find(Select.class).single();
-        test(show).selectItem("To play");
-        test(show).selectItem("All matches");
-        assertThat(((TextField) cell(0, COURT)).getValue()).isEqualTo("2");
+    @Test
+    void courtsAndTimesAreSaved() {
+        enter(0, " 2 ", LocalTime.of(10, 30));
 
-        // Leaving and coming back builds a fresh page, which starts empty: nothing was stored.
+        Match semi = matches.currentMatch(event, 1, 1).orElseThrow();
+        assertThat(semi.court()).isEqualTo("2");
+        assertThat(semi.startTime()).isEqualTo(LocalTime.of(10, 30));
+
+        // Leaving and coming back shows what was saved.
         navigate(AdminEventsView.class);
         navigate(AdminMatchesView.class, event);
-        assertThat(((TextField) cell(0, COURT)).getValue()).isEmpty();
-        assertThat(((TimePicker) cell(0, TIME)).getValue()).isNull();
+        assertThat(((TextField) cell(0, COURT)).getValue()).isEqualTo("2");
+        assertThat(((TimePicker) cell(0, TIME)).getValue()).isEqualTo(LocalTime.of(10, 30));
+
+        // Clearing both removes them.
+        enter(0, "", null);
+        test((TimePicker) cell(0, TIME)).setValue(null);
+        assertThat(matches.currentMatch(event, 1, 1).orElseThrow().scheduled()).isFalse();
     }
 
     @Test

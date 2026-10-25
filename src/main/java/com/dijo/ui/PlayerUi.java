@@ -1,5 +1,6 @@
 package com.dijo.ui;
 
+import com.dijo.events.Match;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.avatar.Avatar;
 import com.vaadin.flow.component.badge.Badge;
@@ -17,8 +18,16 @@ import java.util.Locale;
 final class PlayerUi {
     private static final DateTimeFormatter WHEN =
             DateTimeFormatter.ofPattern("d MMM yyyy, h:mm a").withZone(ZoneId.systemDefault());
+    private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
 
     private PlayerUi() {}
+
+    /** "Court 3 · 10:30 AM", "Court 3" or "10:30 AM"; null when neither is set. */
+    static String scheduleLabel(Match match) {
+        String time = match.startTime() == null ? null : match.startTime().format(TIME);
+        if (match.court() == null) return time;
+        return "Court " + match.court() + (time == null ? "" : " · " + time);
+    }
 
     /** A stored ISO instant as e.g. "3 Oct 2026, 1:29 am". */
     static String dateTime(String isoInstant) {

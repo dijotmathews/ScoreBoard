@@ -1,6 +1,7 @@
 package com.dijo.events;
 
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -20,17 +21,26 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class MatchService {
     private static final int MAX_SCORE_LENGTH = 100;
+    private static final int MAX_COURT_LENGTH = 20;
     private static final RowMapper<Match> MATCH = (rs, row) -> new Match(rs.getString("event_id"),
             rs.getString("event_name"),
             Integer.numberOfTrailingZeros(rs.getInt("contestant_count")),
             rs.getInt("round"), rs.getInt("match_no"),
-            rs.getString("player1"), rs.getBoolean("player1_bye"),
-            rs.getString("player2"), rs.getBoolean("player2_bye"),
-            rs.getString("official"), rs.getString("winner"), rs.getString("score"),
-            rs.getString("result_by"), rs.getString("confirmed_by"));
+            rs.getString("player1"), rs.getString("player1_name"), rs.getBoolean("player1_bye"),
+            rs.getString("player2"), rs.getString("player2_name"), rs.getBoolean("player2_bye"),
+            rs.getString("official"), rs.getString("winner"), rs.getString("winner_name"),
+            rs.getString("score"),
+            rs.getString("result_by"), rs.getString("confirmed_by"), rs.getString("court"),
+            rs.getString("start_time") == null ? null : LocalTime.parse(rs.getString("start_time")));
     private static final String SELECT = """
-            SELECT m.*, e.name AS event_name, e.contestant_count
+            SELECT m.*, e.name AS event_name, e.contestant_count,
+                   COALESCE(p1.full_name, p1.username) AS player1_name,
+                   COALESCE(p2.full_name, p2.username) AS player2_name,
+                   COALESCE(w.full_name, w.username) AS winner_name
             FROM matches m JOIN events e ON e.id = m.event_id
+            LEFT JOIN users p1 ON p1.username = m.player1
+            LEFT JOIN users p2 ON p2.username = m.player2
+            LEFT JOIN users w ON w.username = m.winner
             """;
 
     private final JdbcTemplate jdbc;
@@ -130,6 +140,43 @@ public class MatchService {
                  AND a.authority = 'ROLE_OFFICIAL')
                 ORDER BY u.username
                 """, String.class);
+    }
+
+    /**
+     * Matches still to be played in every locked draw (see {@link Match#remaining()}), by
+     * event name. Within an event, matches with a court or time come first, earliest
+     * start time first; the rest follow in round order.
+     */
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('ADMIN')")
+    public List<Match> remainingMatches() {
+        return jdbc.query(SELECT + """
+                 WHERE e.draw_locked = 1 AND m.confirmed_at IS NULL
+                 AND m.player1_bye = 0 AND m.player2_bye = 0
+                 ORDER BY e.name COLLATE NOCASE, e.id,
+                          (m.court IS NULL AND m.start_time IS NULL),
+                          m.start_time IS NULL, m.start_time, m.round, m.match_no
+                """, MATCH);
+    }
+
+    /**
+     * Sets where and when a match is to be played. A blank court or a null time clears
+     * it. Only matches still to be played can be scheduled.
+     */
+    @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
+    public void schedule(String eventId, int round, int matchNo, String court, LocalTime startTime) {
+        Match match = match(eventId, round, matchNo);
+        if (!match.remaining()) throw new IllegalArgumentException("This match is not to be played");
+        String cleanCourt = court == null || court.isBlank() ? null : court.strip();
+        if (cleanCourt != null && cleanCourt.length() > MAX_COURT_LENGTH) {
+            throw new IllegalArgumentException("Court must be at most " + MAX_COURT_LENGTH + " characters");
+        }
+        jdbc.update("""
+                UPDATE matches SET court = ?, start_time = ?
+                WHERE event_id = ? AND round = ? AND match_no = ?
+                """, cleanCourt, startTime == null ? null : startTime.withSecond(0).withNano(0).toString(),
+                eventId, round, matchNo);
     }
 
     /** official == null removes the assignment. */

@@ -5,6 +5,7 @@ import com.dijo.events.DrawSlot;
 import com.dijo.events.Event;
 import com.dijo.events.EventService;
 import com.dijo.events.EventUpdates;
+import com.dijo.events.Player;
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.button.Button;
@@ -31,10 +32,12 @@ import java.util.List;
 @Route("admin/draw")
 @RolesAllowed("ADMIN")
 public class AdminDrawView extends VerticalLayout implements HasUrlParameter<String>, HasDynamicTitle {
-    /** A picker entry: a player, or BYE when player is null. */
-    private record Choice(String player) {
-        static final Choice BYE = new Choice(null);
-        String label() { return player == null ? "BYE" : player; }
+    /** A picker entry: a player (by username, shown by name), or BYE when player is null. */
+    private record Choice(String player, String name) {
+        static final Choice BYE = new Choice(null, null);
+        String label() { return player == null ? "BYE" : name; }
+        /** Picker text: the username after the name tells same-named players apart. */
+        String pickerLabel() { return player == null || name.equals(player) ? label() : name + " (" + player + ")"; }
     }
 
     private final EventService events;
@@ -44,7 +47,7 @@ public class AdminDrawView extends VerticalLayout implements HasUrlParameter<Str
     private final Div stats = new Div();
     private final Grid<DrawSlot> grid = new Grid<>(DrawSlot.class, false);
     private Event event;
-    private List<String> unplaced = List.of();
+    private List<Player> unplaced = List.of();
     private Runnable unsubscribe;
 
     public AdminDrawView(EventService events, DrawService draws, EventUpdates updates) {
@@ -97,14 +100,15 @@ public class AdminDrawView extends VerticalLayout implements HasUrlParameter<Str
     private ComboBox<Choice> playerPicker(DrawSlot slot) {
         List<Choice> choices = new ArrayList<>();
         choices.add(Choice.BYE);
-        if (slot.playerUsername() != null) choices.add(new Choice(slot.playerUsername()));
-        unplaced.forEach(player -> choices.add(new Choice(player)));
+        Choice current = slot.playerUsername() == null ? null
+                : new Choice(slot.playerUsername(), slot.playerName());
+        if (current != null) choices.add(current);
+        unplaced.forEach(player -> choices.add(new Choice(player.username(), player.name())));
 
         ComboBox<Choice> picker = new ComboBox<>();
         picker.setItems(choices);
-        picker.setItemLabelGenerator(Choice::label);
-        picker.setValue(slot.bye() ? Choice.BYE
-                : slot.playerUsername() == null ? null : new Choice(slot.playerUsername()));
+        picker.setItemLabelGenerator(Choice::pickerLabel);
+        picker.setValue(slot.bye() ? Choice.BYE : current);
         picker.setPlaceholder("Choose a player or BYE");
         picker.setClearButtonVisible(true);
         picker.setReadOnly(event.drawLocked());

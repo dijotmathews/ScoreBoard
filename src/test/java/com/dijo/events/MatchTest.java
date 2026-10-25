@@ -9,8 +9,8 @@ import org.junit.jupiter.api.Test;
 class MatchTest {
     private static Match match(int totalRounds, int round, String p1, boolean bye1, String p2, boolean bye2,
             String winner, String confirmedBy) {
-        return new Match("e", "Singles", totalRounds, round, 1, p1, bye1, p2, bye2,
-                null, winner, null, null, confirmedBy);
+        return new Match("e", "Singles", totalRounds, round, 1, p1, p1, bye1, p2, p2, bye2,
+                null, winner, winner, null, null, confirmedBy, null, null);
     }
 
     @Test

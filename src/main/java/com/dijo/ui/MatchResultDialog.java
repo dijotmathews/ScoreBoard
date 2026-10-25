@@ -103,12 +103,13 @@ class MatchResultDialog extends Dialog {
         } else if (match.byeMatch() && match.winner() == null) {
             body.add(PlayerUi.muted("The player facing the BYE is not known yet; they will advance automatically."));
         } else if (match.byeMatch()) {
-            body.add(PlayerUi.muted(match.winner() + " advances automatically; the BYE is eliminated."
+            body.add(PlayerUi.muted(match.winnerName() + " advances automatically; the BYE is eliminated."
                     + (match.confirmed() ? "" : " Confirm to move them on.")));
         } else if (!match.ready()) {
             body.add(PlayerUi.muted("The players for this match are not known yet."));
         } else if (editable) {
             winner.setItems(List.of(match.player1(), match.player2()));
+            winner.setItemLabelGenerator(match::nameOf);
             winner.setValue(match.winner());
             score.setValue(match.score() == null ? "" : match.score());
             body.add(winner, score);
@@ -212,7 +213,7 @@ class MatchResultDialog extends Dialog {
 
     private String loser() {
         if (match.byeMatch()) return "The BYE";
-        return match.winner().equals(match.player1()) ? match.player2() : match.player1();
+        return match.winner().equals(match.player1()) ? match.player2Name() : match.player1Name();
     }
 
     private void done(String message) {

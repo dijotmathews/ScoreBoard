@@ -134,6 +134,15 @@ public class PlayerBenefitsService {
         return load(paymentId(actor()));
     }
 
+    /** The signed-in player's full name, or their username when they have none. */
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('USER')")
+    public String myName() {
+        String me = actor();
+        return jdbc.queryForList("SELECT COALESCE(full_name, username) FROM users WHERE username = ?",
+                String.class, me).stream().findFirst().orElse(me);
+    }
+
     @Transactional(readOnly = true)
     @PreAuthorize("hasAnyRole('ADMIN', 'OFFICIAL')")
     public Benefits playerBenefits(String playerUsername) {
@@ -180,9 +189,12 @@ public class PlayerBenefitsService {
         return ids.getFirst();
     }
 
-    public record PlayerBenefitRow(String username, boolean enabled, String paymentId,
+    /** fullName is null when the player has none. */
+    public record PlayerBenefitRow(String username, String fullName, boolean enabled, String paymentId,
             String paymentReference, long amountPaise, String kitHandedOverAt,
             int couponsIssued, int couponsRedeemed) {
+        /** How the player is shown: their full name, else their username. */
+        public String name() { return fullName == null ? username : fullName; }
         public boolean paid() { return paymentId != null; }
         public int couponsRemaining() { return couponsIssued - couponsRedeemed; }
     }
@@ -192,7 +204,7 @@ public class PlayerBenefitsService {
     @PreAuthorize("hasRole('ADMIN')")
     public List<PlayerBenefitRow> listPlayerBenefits() {
         return jdbc.query("""
-                SELECT u.username, u.enabled, p.id AS payment_id,
+                SELECT u.username, u.full_name, u.enabled, p.id AS payment_id,
                        p.payment_reference, COALESCE(p.amount_paise, 0) AS amount_paise,
                        k.handed_over_at,
                        COALESCE(c.issued, 0) AS coupons_issued,
@@ -209,9 +221,9 @@ public class PlayerBenefitsService {
                               WHERE a.username = u.username AND a.authority = 'ROLE_USER')
                 AND NOT EXISTS (SELECT 1 FROM authorities staff WHERE staff.username = u.username
                                 AND staff.authority IN ('ROLE_ADMIN', 'ROLE_OFFICIAL'))
-                ORDER BY u.username
+                ORDER BY COALESCE(u.full_name, u.username) COLLATE NOCASE, u.username
                 """, (rs, row) -> new PlayerBenefitRow(rs.getString("username"),
-                rs.getBoolean("enabled"), rs.getString("payment_id"),
+                rs.getString("full_name"), rs.getBoolean("enabled"), rs.getString("payment_id"),
                 rs.getString("payment_reference"), rs.getLong("amount_paise"),
                 rs.getString("handed_over_at"), rs.getInt("coupons_issued"),
                 rs.getInt("coupons_redeemed")));

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.dijo.DatabaseTest;
+import java.time.LocalTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +40,57 @@ class MatchServiceTest extends DatabaseTest {
 
     private Match match(int round, int matchNo) {
         return matches.currentMatch(event, round, matchNo).orElseThrow();
+    }
+
+    @Test
+    void schedulesAMatchCourtAndTime() {
+        matches.schedule(event, 1, 1, "  3 ", LocalTime.of(9, 15));
+        assertThat(match(1, 1).court()).isEqualTo("3");
+        assertThat(match(1, 1).startTime()).isEqualTo(LocalTime.of(9, 15));
+
+        matches.schedule(event, 1, 1, " ", null);
+        assertThat(match(1, 1).scheduled()).isFalse();
+    }
+
+    @Test
+    void onlyMatchesStillToPlayCanBeScheduled() {
+        matches.recordResult(event, 1, 1, "ada", "21-15");
+        matches.confirmResult(event, 1, 1);
+
+        assertThatThrownBy(() -> matches.schedule(event, 1, 1, "3", null))
+                .hasMessage("This match is not to be played");
+        assertThatThrownBy(() -> matches.schedule(event, 1, 2, "x".repeat(21), null))
+                .hasMessage("Court must be at most 20 characters");
+    }
+
+    @Test
+    void remainingMatchesPutScheduledOnesFirstByTime() {
+        String doubles = events.createEvent("Doubles", 2);
+        draws.assign(doubles, 1, "ada");
+        draws.assign(doubles, 2, "bob");
+        draws.lock(doubles);
+        matches.recordResult(event, 1, 1, "ada", "21-15");
+        matches.confirmResult(event, 1, 1);
+        matches.schedule(event, 2, 1, "1", LocalTime.of(16, 0));
+        matches.schedule(event, 1, 2, null, LocalTime.of(10, 0));
+
+        assertThat(matches.remainingMatches())
+                .extracting(m -> m.eventName() + " " + m.round() + "-" + m.matchNo())
+                .containsExactly("Doubles 1-1", "Singles 1-2", "Singles 2-1");
+
+        matches.schedule(event, 1, 2, null, null);
+        matches.schedule(event, 2, 1, "1", null);
+        assertThat(matches.remainingMatches())
+                .extracting(m -> m.eventName() + " " + m.round() + "-" + m.matchNo())
+                .containsExactly("Doubles 1-1", "Singles 2-1", "Singles 1-2");
+    }
+
+    @Test
+    void schedulingIsAdminOnly() {
+        signIn("ref", "OFFICIAL");
+        assertThatThrownBy(() -> matches.schedule(event, 1, 1, "3", null))
+                .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> matches.remainingMatches()).isInstanceOf(AccessDeniedException.class);
     }
 
     @Test

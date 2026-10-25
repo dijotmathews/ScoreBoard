@@ -91,7 +91,7 @@ public class AdminPlayersView extends VerticalLayout {
         toolbar.addClassName("grid-toolbar");
 
         grid.addComponentColumn(this::playerCell).setHeader("Player").setFrozen(true)
-                .setComparator(PlayerBenefitRow::username).setSortable(true).setFlexGrow(2);
+                .setComparator(r -> r.name().toLowerCase(Locale.ROOT)).setSortable(true).setFlexGrow(2);
         grid.addComponentColumn(r -> r.paid() ? badge("Signed up", BadgeVariant.SUCCESS)
                 : badge("Not signed up", BadgeVariant.WARNING)).setHeader("Sign-up");
         grid.addColumn(r -> r.paid() ? PlayerEditorDialog.rupees(r.amountPaise()) : "—")
@@ -116,9 +116,10 @@ public class AdminPlayersView extends VerticalLayout {
     }
 
     private Div playerCell(PlayerBenefitRow row) {
-        Avatar avatar = new Avatar(row.username());
+        Avatar avatar = new Avatar(row.name());
         avatar.addThemeName("xsmall");
-        Div cell = new Div(avatar, new Span(row.username()));
+        Div cell = new Div(avatar, new Span(row.name()));
+        if (row.fullName() != null) cell.add(PlayerUi.muted(row.username()));
         if (!row.enabled()) cell.add(badge("Disabled", BadgeVariant.ERROR));
         cell.addClassName("player-cell");
         return cell;
@@ -153,7 +154,8 @@ public class AdminPlayersView extends VerticalLayout {
         String term = search.getValue().strip().toLowerCase(Locale.ROOT);
         Show filter = show.getValue() == null ? Show.ALL : show.getValue();
         List<PlayerBenefitRow> visible = rows.stream()
-                .filter(r -> r.username().toLowerCase(Locale.ROOT).contains(term))
+                .filter(r -> r.username().toLowerCase(Locale.ROOT).contains(term)
+                        || r.name().toLowerCase(Locale.ROOT).contains(term))
                 .filter(filter.test).toList();
         grid.setItems(visible);
         showing.setText(visible.size() == rows.size() ? rows.size() + " players"

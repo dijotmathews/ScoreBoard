@@ -75,7 +75,8 @@ public class PlayerHomeView extends MobileHomeLayout {
         }
         List<PlayerDraw> myDraws = draws.myDraws();
         List<Match> myMatches = matches.myPlayerMatches();
-        content.add(PlayerUi.header(me, "Welcome, " + me, mine != null),
+        String name = benefits.myName();
+        content.add(PlayerUi.header(name, "Welcome, " + name, mine != null),
                 nextMatches(myDraws, myMatches), atAGlance(mine, myDraws, myMatches));
     }
 

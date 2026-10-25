@@ -47,21 +47,26 @@ public class DrawService {
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('ADMIN')")
     public List<DrawSlot> draw(String eventId) {
-        return jdbc.query("SELECT * FROM draw_slots WHERE event_id = ? ORDER BY slot",
-                (rs, row) -> new DrawSlot(rs.getString("event_id"), rs.getInt("slot"),
-                        rs.getString("player_username"), rs.getBoolean("is_bye")), eventId);
+        return jdbc.query("""
+                SELECT d.*, COALESCE(u.full_name, u.username) AS player_name
+                FROM draw_slots d LEFT JOIN users u ON u.username = d.player_username
+                WHERE d.event_id = ? ORDER BY d.slot
+                """, (rs, row) -> new DrawSlot(rs.getString("event_id"), rs.getInt("slot"),
+                        rs.getString("player_username"), rs.getString("player_name"),
+                        rs.getBoolean("is_bye")), eventId);
     }
 
     /** Signed-up players not yet placed in this event's draw. */
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('ADMIN')")
-    public List<String> unplacedPlayers(String eventId) {
-        return jdbc.queryForList("""
-                SELECT u.username FROM users u WHERE %s
+    public List<Player> unplacedPlayers(String eventId) {
+        return jdbc.query("""
+                SELECT u.username, COALESCE(u.full_name, u.username) AS name FROM users u WHERE %s
                 AND NOT EXISTS (SELECT 1 FROM draw_slots d
                                 WHERE d.event_id = ? AND d.player_username = u.username)
-                ORDER BY u.username
-                """.formatted(SIGNED_UP), String.class, eventId);
+                ORDER BY name COLLATE NOCASE, u.username
+                """.formatted(SIGNED_UP),
+                (rs, row) -> new Player(rs.getString("username"), rs.getString("name")), eventId);
     }
 
     /** Puts a signed-up player in a slot, replacing whoever was there. */
@@ -183,14 +188,16 @@ public class DrawService {
         String me = SecurityContextHolder.getContext().getAuthentication().getName();
         return jdbc.query("""
                 SELECT e.id, e.name, e.draw_locked, d.slot,
-                       o.player_username AS opponent, o.is_bye AS opponent_bye
+                       o.player_username AS opponent, o.is_bye AS opponent_bye,
+                       COALESCE(u.full_name, u.username) AS opponent_name
                 FROM draw_slots d JOIN events e ON e.id = d.event_id
                 LEFT JOIN draw_slots o ON o.event_id = d.event_id
                      AND o.slot = CASE WHEN d.slot % 2 = 1 THEN d.slot + 1 ELSE d.slot - 1 END
+                LEFT JOIN users u ON u.username = o.player_username
                 WHERE d.player_username = ?
                 ORDER BY e.name
                 """, (rs, row) -> new PlayerDraw(rs.getString("id"), rs.getString("name"), rs.getInt("slot"),
-                rs.getString("opponent"), rs.getBoolean("opponent_bye"),
+                rs.getString("opponent"), rs.getString("opponent_name"), rs.getBoolean("opponent_bye"),
                 rs.getBoolean("draw_locked")), me);
     }
 

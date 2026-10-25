@@ -36,6 +36,9 @@ CREATE TABLE IF NOT EXISTS matches (
     result_at TEXT,
     confirmed_by TEXT REFERENCES users(username),
     confirmed_at TEXT,
+    -- Where and when the match is to be played, set by the admin; start_time is HH:MM.
+    court TEXT,
+    start_time TEXT,
     PRIMARY KEY(event_id, round, match_no),
     CHECK(player1_bye = 0 OR player1 IS NULL),
     CHECK(player2_bye = 0 OR player2 IS NULL),

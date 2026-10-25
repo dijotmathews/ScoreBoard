@@ -15,7 +15,6 @@ import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
-import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
 import java.util.Locale;
 
@@ -24,9 +23,8 @@ import java.util.Locale;
 @PageTitle("My Profile")
 @RolesAllowed("USER")
 public class PlayerProfileView extends MobileHomeLayout {
-    public PlayerProfileView(PlayerBenefitsService benefits, AuthenticationContext authentication) {
+    public PlayerProfileView(PlayerBenefitsService benefits) {
         super("My Profile");
-        String me = authentication.getPrincipalName().orElse("");
 
         Benefits mine;
         try {
@@ -35,7 +33,8 @@ public class PlayerProfileView extends MobileHomeLayout {
             mine = null;
         }
 
-        add(PlayerUi.header(me, me, mine != null), new H3("My Benefits"));
+        String name = benefits.myName();
+        add(PlayerUi.header(name, name, mine != null), new H3("My Benefits"));
         if (mine == null) {
             Card card = card("Sign up", badge("Not signed up", BadgeVariant.WARNING));
             card.add(muted(benefits.settings()

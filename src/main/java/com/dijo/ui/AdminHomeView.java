@@ -1,15 +1,23 @@
 package com.dijo.ui;
 
+import static com.dijo.ui.PlayerUi.badge;
+import static com.dijo.ui.PlayerUi.card;
+import static com.dijo.ui.PlayerUi.listRow;
+
 import com.dijo.benefits.PlayerBenefitsService;
 import com.dijo.benefits.PlayerBenefitsService.PlayerBenefitRow;
 import com.dijo.events.EventService;
 import com.dijo.events.EventSummary;
+import com.dijo.events.Match;
 import com.dijo.events.MatchService;
 import com.dijo.events.MatchService.MatchTotals;
 import com.dijo.events.OfficialService;
 import com.dijo.events.OfficialService.Official;
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.badge.BadgeVariant;
+import com.vaadin.flow.component.card.Card;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.icon.VaadinIcon;
@@ -19,7 +27,10 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouterLink;
 import jakarta.annotation.security.RolesAllowed;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Route("admin")
 @PageTitle("Admin Home")
@@ -39,7 +50,47 @@ public class AdminHomeView extends VerticalLayout {
         addOfficialsSummary(officialsCard, officials);
         Div links = new Div(players, eventsCard, officialsCard);
         links.addClassName("home-links");
-        add(PlayerUi.pageHeader("Admin Home", "Run the tournament from here."), links);
+        add(PlayerUi.pageHeader("Admin Home", "Run the tournament from here."), links,
+                remainingMatches(matches.remainingMatches()));
+    }
+
+    /**
+     * One card per event with its matches still to be played, as ordered by the service:
+     * those with a court or time first, earliest first, then the rest in round order.
+     */
+    private static Component remainingMatches(List<Match> remaining) {
+        H2 heading = new H2("Remaining matches");
+        heading.addClassName("home-section-title");
+        Div cards = new Div();
+        cards.addClassName("home-remaining");
+        if (remaining.isEmpty()) {
+            cards.add(PlayerUi.muted("No matches to play. Lock an event's draw to create its matches."));
+        }
+        Map<String, List<Match>> byEvent = remaining.stream()
+                .collect(Collectors.groupingBy(Match::eventId, LinkedHashMap::new, Collectors.toList()));
+        byEvent.values().forEach(list -> cards.add(eventCard(list)));
+        Div section = new Div(heading, cards);
+        section.addClassName("home-section");
+        return section;
+    }
+
+    private static Card eventCard(List<Match> list) {
+        Match first = list.getFirst();
+        long scheduled = list.stream().filter(Match::scheduled).count();
+        Card card = card(first.eventName(), badge(list.size() + (list.size() == 1 ? " match" : " matches")));
+        card.setSubtitle(scheduled + " with a court or time");
+        Div rows = PlayerUi.list();
+        for (Match m : list) {
+            String detail = m.roundName() + " · Match " + m.matchNo()
+                    + (m.official() == null ? "" : " · " + m.official());
+            String where = PlayerUi.scheduleLabel(m);
+            rows.add(listRow(m.side1() + " vs " + m.side2(), new Span(detail),
+                    where == null ? badge("Not scheduled") : badge(where, BadgeVariant.SUCCESS)));
+        }
+        card.add(rows);
+        RouterLink open = new RouterLink("Open matches", AdminMatchesView.class, first.eventId());
+        card.addToFooter(open);
+        return card;
     }
 
     /** The Players and Benefits page figures as mini meters, with the entry fee as a badge. */

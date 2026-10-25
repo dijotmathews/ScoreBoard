@@ -31,6 +31,7 @@ import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.BigDecimalField;
 import com.vaadin.flow.component.textfield.PasswordField;
 import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.data.value.ValueChangeMode;
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -42,6 +43,7 @@ class PlayerEditorDialog extends Dialog {
     private final Runnable onChange;
 
     private final TextField username = new TextField("Username");
+    private final TextField fullName = new TextField("Full name");
     private final PasswordField password = new PasswordField();
     private final Checkbox enabled = new Checkbox("Account enabled", true);
     private final VerticalLayout benefitsPanel = new VerticalLayout();
@@ -55,20 +57,32 @@ class PlayerEditorDialog extends Dialog {
         this.onChange = onChange;
         boolean creating = player == null;
 
-        setHeaderTitle(creating ? "New player" : "Player: " + player.username());
+        setHeaderTitle(creating ? "New player" : "Player: " + player.name());
         setWidth("min(640px, 100vw)");
 
-        password.setLabel(creating ? "Password" : "New password");
-        password.setHelperText(creating ? "At least 8 characters"
-                : "Leave blank to keep the current password");
-        if (!creating) {
+        fullName.setPlaceholder("e.g. Dijo T Mathews");
+        username.setReadOnly(true);
+        FormLayout form = new FormLayout();
+        if (creating) {
+            // The username, and the initial password, come from the full name.
+            fullName.setRequiredIndicatorVisible(true);
+            fullName.setHelperText("Shown in draws and matches");
+            fullName.setValueChangeMode(ValueChangeMode.EAGER);
+            fullName.addValueChangeListener(e -> username.setValue(previewUsername(e.getValue())));
+            username.setHelperText("Also the initial password; a number is added if it is taken");
+            form.add(fullName, username, enabled);
+        } else {
+            fullName.setHelperText("Shown in draws and matches; the username if left blank");
+            fullName.setValue(player.fullName() == null ? "" : player.fullName());
             username.setValue(player.username());
-            username.setReadOnly(true);
+            password.setLabel("New password");
+            password.setHelperText("Leave blank to keep the current password");
             enabled.setValue(player.enabled());
+            form.add(fullName, username, password, enabled);
         }
-        FormLayout form = new FormLayout(username, password, enabled);
         form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1),
                 new FormLayout.ResponsiveStep("400px", 2));
+        form.setColspan(fullName, 2);
         form.setColspan(enabled, 2);
         add(form);
 
@@ -93,24 +107,41 @@ class PlayerEditorDialog extends Dialog {
     }
 
     private void save() {
+        String[] created = new String[1];
         boolean ok = run(() -> {
             if (player == null) {
-                accounts.createPlayer(username.getValue().strip(), password.getValue(),
-                        enabled.getValue());
+                created[0] = accounts.createPlayer(fullName.getValue(), enabled.getValue());
             } else {
-                accounts.updatePlayer(player.username(), enabled.getValue(), password.getValue());
+                accounts.updatePlayer(player.username(), fullName.getValue(), enabled.getValue(),
+                        password.getValue());
             }
         });
         if (ok) {
-            notify(player == null ? "Player created" : "Player updated");
+            if (created[0] == null) {
+                notify("Player updated");
+            } else {
+                // Kept on screen longer so the admin can pass the sign-in details on.
+                Notification.show("Player created. Username and initial password: " + created[0],
+                        8000, Notification.Position.BOTTOM_START)
+                        .addThemeVariants(NotificationVariant.SUCCESS);
+            }
             onChange.run();
             close();
         }
     }
 
+    /** The username a full name gives, before any number is added; blank while it gives none. */
+    private static String previewUsername(String name) {
+        try {
+            return PlayerAccountService.usernameFor(name.strip());
+        } catch (IllegalArgumentException tooShort) {
+            return "";
+        }
+    }
+
     private void confirmDelete() {
         ConfirmDialog confirm = new ConfirmDialog();
-        confirm.setHeader("Delete " + player.username() + "?");
+        confirm.setHeader("Delete " + player.name() + "?");
         confirm.setText("The account and its roles will be removed permanently.");
         confirm.setCancelable(true);
         confirm.setConfirmText("Delete");

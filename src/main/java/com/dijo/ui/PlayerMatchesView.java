@@ -80,7 +80,7 @@ public class PlayerMatchesView extends MobileHomeLayout {
             Card card = card(draw.eventName(), badge("Draw not final", BadgeVariant.WARNING));
             card.add(rows("Slot", String.valueOf(draw.slot()),
                     "First opponent", draw.opponentBye() ? "BYE"
-                            : draw.opponent() == null ? "Not drawn yet" : draw.opponent()));
+                            : draw.opponent() == null ? "Not drawn yet" : draw.opponentName()));
             return card;
         }
 

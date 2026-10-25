@@ -106,7 +106,7 @@ public class PlayerDrawsView extends MobileHomeLayout {
                 .mapToLong(m -> (m.player1() != null ? 1 : 0) + (m.player2() != null ? 1 : 0)).sum();
         if (fin.confirmed()) {
             status.add(PlayerUi.badge("Complete", BadgeVariant.SUCCESS));
-            summary.setText("Champion: " + fin.winner() + " · " + players + " players");
+            summary.setText("Champion: " + fin.winnerName() + " · " + players + " players");
         } else {
             status.add(PlayerUi.badge("In progress"));
             summary.setText(players + " players · " + played + " of " + knockout.size() + " matches played");

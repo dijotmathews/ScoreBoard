@@ -40,7 +40,24 @@ class DrawServiceTest extends DatabaseTest {
         draws.assign(event, 1, "ada");
 
         assertThat(draws.draw(event).getFirst().playerUsername()).isEqualTo("ada");
-        assertThat(draws.unplacedPlayers(event)).containsExactly("bob", "cy");
+        assertThat(draws.unplacedPlayers(event)).extracting(Player::username).containsExactly("bob", "cy");
+    }
+
+    @Test
+    void showsPlayersByFullName() {
+        jdbc.update("UPDATE users SET full_name = 'Dijo T Mathews' WHERE username = 'cy'");
+        draws.assign(event, 1, "cy");
+        draws.assign(event, 2, "bob");
+
+        assertThat(draws.draw(event).getFirst().playerName()).isEqualTo("Dijo T Mathews");
+        assertThat(draws.unplacedPlayers(event)).containsExactly(new Player("ada", "ada"));
+        draws.assignBye(event, 3);
+        draws.assignBye(event, 4);
+        draws.lock(event);
+        Match first = matches.bracket(event).getFirst();
+        assertThat(first.player1()).isEqualTo("cy");
+        assertThat(first.side1()).isEqualTo("Dijo T Mathews");
+        assertThat(first.side2()).isEqualTo("bob");
     }
 
     @Test
@@ -53,7 +70,7 @@ class DrawServiceTest extends DatabaseTest {
             assertThatThrownBy(() -> draws.assign(event, 1, notEligible))
                     .hasMessage("Only signed-up players can be placed in the draw");
         }
-        assertThat(draws.unplacedPlayers(event)).containsExactly("ada", "bob");
+        assertThat(draws.unplacedPlayers(event)).extracting(Player::username).containsExactly("ada", "bob");
     }
 
     @Test
