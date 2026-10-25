@@ -43,6 +43,13 @@ public class SchemaMigration implements InitializingBean {
                 "INTEGER NOT NULL DEFAULT 0 CHECK(draw_locked IN (0, 1))");
         addColumnIfMissing("draw_slots", "is_bye", "INTEGER NOT NULL DEFAULT 0"
                 + " CHECK(is_bye IN (0, 1) AND (is_bye = 0 OR player_username IS NULL))");
+        addColumnIfMissing("events", "team_size", "INTEGER NOT NULL DEFAULT 1 CHECK(team_size IN (1, 2))");
+        addColumnIfMissing("draw_slots", "partner_username", "TEXT REFERENCES users(username)"
+                + " CHECK(partner_username IS NULL"
+                + " OR (player_username IS NOT NULL AND partner_username <> player_username))");
+        // After the column exists, so it also works on databases created before doubles.
+        jdbc.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_draw_partner"
+                + " ON draw_slots(event_id, partner_username)");
         jdbc.update(DrawService.CREATE_EMPTY_DRAWS, null, null);
         // Draws locked before matches existed get their bracket now.
         for (String eventId : jdbc.queryForList("""

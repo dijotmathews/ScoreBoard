@@ -9,9 +9,9 @@ import org.junit.jupiter.api.Test;
 /** A four-player bracket: ada beat bob (confirmed), cy has a BYE, the final is open. */
 class BracketSvgTest {
     private static final List<Match> MATCHES = List.of(
-            new Match("e", "Singles", 2, 1, 1, "ada", "ada", false, "bob", "bob", false, null, "ada", "ada", "21-15", "ref", "admin", null, null),
-            new Match("e", "Singles", 2, 1, 2, "cy", "cy", false, null, null, true, null, "cy", "cy", null, null, null, null, null),
-            new Match("e", "Singles", 2, 2, 1, "ada", "ada", false, null, null, false, null, null, null, null, null, null, null, null));
+            new Match("e", "Singles", 2, 1, 1, "ada", "ada", false, "bob", "bob", false, null, "ada", "ada", "21-15", "ref", "admin", null, null, null, null),
+            new Match("e", "Singles", 2, 1, 2, "cy", "cy", false, null, null, true, null, "cy", "cy", null, null, null, null, null, null, null),
+            new Match("e", "Singles", 2, 2, 1, "ada", "ada", false, null, null, false, null, null, null, null, null, null, null, null, null, null));
 
     @Test
     void drawsEveryPlayerTheByeAndRoundHeaders() {
@@ -36,7 +36,7 @@ class BracketSvgTest {
     @Test
     void showsFullNamesAndHighlightsByUsername() {
         List<Match> named = List.of(new Match("e", "E", 1, 1, 1, "dijo", "Dijo T Mathews", false,
-                "bob", "bob", false, null, null, null, null, null, null, null, null));
+                "bob", "bob", false, null, null, null, null, null, null, null, null, null, null));
         String svg = BracketSvg.render(named, "dijo");
         assertThat(svg).contains("font-weight='700' style='fill: var(--aura-accent-color, currentColor)'>Dijo T Mathews<")
                 .doesNotContain(">dijo<");
@@ -66,9 +66,9 @@ class BracketSvgTest {
     @Test
     void aMatchBetweenTwoByesSendsAByeIntoTheNextColumn() {
         List<Match> byes = List.of(
-                new Match("e", "E", 2, 1, 1, "ada", "ada", false, "bob", "bob", false, null, null, null, null, null, null, null, null),
-                new Match("e", "E", 2, 1, 2, null, null, true, null, null, true, null, null, null, null, null, null, null, null),
-                new Match("e", "E", 2, 2, 1, null, null, false, null, null, true, null, null, null, null, null, null, null, null));
+                new Match("e", "E", 2, 1, 1, "ada", "ada", false, "bob", "bob", false, null, null, null, null, null, null, null, null, null, null),
+                new Match("e", "E", 2, 1, 2, null, null, true, null, null, true, null, null, null, null, null, null, null, null, null, null),
+                new Match("e", "E", 2, 2, 1, null, null, false, null, null, true, null, null, null, null, null, null, null, null, null, null));
 
         // Two BYEs in round 1, and the one they send into the final.
         assertThat(BracketSvg.render(byes, null).split(">BYE<", -1)).hasSize(4);
@@ -77,7 +77,7 @@ class BracketSvgTest {
     @Test
     void escapesNames() {
         List<Match> tricky = List.of(
-                new Match("e", "A&B", 1, 1, 1, "<o'neil>", "<o'neil>", false, "bob", "bob", false, null, null, null, null, null, null, null, null));
+                new Match("e", "A&B", 1, 1, 1, "<o'neil>", "<o'neil>", false, "bob", "bob", false, null, null, null, null, null, null, null, null, null, null));
         String svg = BracketSvg.image(tricky, "Tom & Jerry", m -> null);
 
         assertThat(svg).contains("&lt;o&apos;neil&gt;", "Tom &amp; Jerry").doesNotContain("<o'neil>");
@@ -87,7 +87,18 @@ class BracketSvgTest {
     void shortensLongNames() {
         List<Match> longName = List.of(
                 new Match("e", "E", 1, 1, 1, "abcdefghijklmnopqrstuvwxyz", "abcdefghijklmnopqrstuvwxyz", false, "bob", "bob", false,
-                        null, null, null, null, null, null, null, null));
+                        null, null, null, null, null, null, null, null, null, null));
         assertThat(BracketSvg.render(longName, null)).contains(">abcdefghijklmnopqrstuvw…<");
+    }
+
+    @Test
+    void widensColumnsForTeamsAndShortensEachPlayer() {
+        String team = "Dijo T Mathews & abcdefghijklmnopqrstuvwxyz";
+        List<Match> doubles = List.of(new Match("e", "E", 1, 1, 1, "dijo", team, false, "bob", "bob & cy", false,
+                null, null, null, null, null, null, null, null, "zed", "cy"));
+        String svg = BracketSvg.render(doubles, "dijo");
+
+        assertThat(svg).contains(">Dijo T Mathews &amp; abcdefghijklmnopqrstuvw…<");
+        assertThat(svg).doesNotContain("width='380'");  // the singles width: 200 + 170 + 10
     }
 }

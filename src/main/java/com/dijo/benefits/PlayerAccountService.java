@@ -102,7 +102,8 @@ public class PlayerAccountService {
                     "Player has confirmed payments and cannot be deleted; disable the account instead");
         }
         Integer placed = jdbc.queryForObject(
-                "SELECT count(*) FROM draw_slots WHERE player_username = ?", Integer.class, username);
+                "SELECT count(*) FROM draw_slots WHERE ? IN (player_username, partner_username)",
+                Integer.class, username);
         if (placed != null && placed > 0) {
             throw new IllegalArgumentException(
                     "Player is placed in a draw; remove them from the draw first");

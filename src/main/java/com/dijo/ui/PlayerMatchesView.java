@@ -104,7 +104,7 @@ public class PlayerMatchesView extends MobileHomeLayout {
         return card;
     }
 
-    /** The signed-in player's username, taken from their first-round side. */
+    /** The signed-in player's side, by its lead username (their own, or their team's lead in doubles). */
     private static String myName(Match first, int slot) {
         return slot % 2 == 1 ? first.player1() : first.player2();
     }
