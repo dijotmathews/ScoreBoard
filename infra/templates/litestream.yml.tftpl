@@ -1,0 +1,10 @@
+dbs:
+  - path: /data/app.db
+    replicas:
+      - type: s3
+        bucket: ${backup_bucket}
+        path: app.db
+        region: ${region}
+        # A full snapshot daily; point-in-time restore over the last 7 days.
+        snapshot-interval: 24h
+        retention: 168h

@@ -1,34 +1,44 @@
-# My Application README
+# ScoreBoard
 
-- [ ] TODO Replace or update this README with instructions relevant to your application
+Draws, matches and player benefits for a tournament: a Vaadin Flow and Spring Boot app on SQLite.
 
-To start the application in development mode, import it into your IDE and run the `Application` class. 
-You can also start the application from the command line by running: 
+## Development
+
+The app needs Java 25. Start it from the IDE by running `Application`, or from the command line:
 
 ```bash
 ./mvnw
 ```
 
-To build the application in production mode, run:
+It uses `./app.db`, which is created on first start. To create demo accounts, set
+`app.seed-users=true` in `application.properties` (see `UserInitializer`).
+
+Run the tests:
 
 ```bash
-./mvnw package
+./mvnw test
 ```
 
-To build a Docker image, run:
+## Production
+
+Build the jar with `./mvnw package`, or the image with `docker build -t scoreboard .`. The image runs with
+the `prod` profile (`application-prod.properties`):
+
+- The database is `/data/app.db`, with SQLite's write-ahead log on. Mount a volume at `/data`.
+- On an empty database, set `APP_BOOTSTRAP_ADMIN_PASSWORD` to create the first `admin`
+  account (`AdminBootstrap`).
+- The app expects to sit behind CloudFront, which terminates HTTPS.
 
 ```bash
-docker build -t my-application:latest .
+docker run -p 8080:8080 -v scoreboard-data:/data -e APP_BOOTSTRAP_ADMIN_PASSWORD='change-me-now' scoreboard
 ```
 
-If you use commercial components, pass the license key as a build secret:
+## AWS
 
-```bash
-docker build --secret id=proKey,src=$HOME/.vaadin/proKey .
-```
+The app runs at https://scoreboard.enigma-tech.in on one EC2 instance in ap-south-1,
+behind CloudFront, with Litestream backups to S3. Terraform in [`infra/`](infra/README.md)
+sets it up.
 
-## Getting Started
-
-The [Quick Start](https://vaadin.com/docs/v25/getting-started/quick-start) tutorial helps you get started with Vaadin in 
-around 10 minutes. This tutorial walks you through building a simple application, introducing the core concepts along 
-the way.
+- `.github/workflows/ci.yml` runs the tests and checks the Terraform on pull requests and branches.
+- `.github/workflows/deploy.yml` runs on pushes to `main`. It tests the app, builds the
+  `linux/arm64` image, pushes it to ECR and deploys it to the server through SSM.

@@ -1,0 +1,4 @@
+# Copy to backend.hcl and set the bucket created in step 1 of README.md.
+bucket = "scoreboard-tfstate-ACCOUNT_ID"
+key    = "scoreboard/terraform.tfstate"
+region = "ap-south-1"
