@@ -64,6 +64,7 @@ public class AdminEventsView extends VerticalLayout {
 
         grid.addColumn(s -> s.event().name()).setHeader("Event").setFrozen(true)
                 .setSortable(true).setFlexGrow(2);
+        grid.addColumn(s -> s.event().doubles() ? "Doubles" : "Singles").setHeader("Type").setSortable(true);
         grid.addColumn(s -> s.event().contestantCount()).setHeader("Contestants").setSortable(true);
         grid.addComponentColumn(this::status).setHeader("Draw");
         grid.addComponentColumn(this::filled).setHeader("Filled").setWidth("200px").setFlexGrow(0);

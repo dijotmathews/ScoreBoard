@@ -94,7 +94,7 @@ public class PlayerHomeView extends MobileHomeLayout {
         }
         Div list = PlayerUi.list();
         for (Match m : upcoming) {
-            String opponent = me.equals(m.player1()) ? m.side2() : m.side1();
+            String opponent = m.player1().equals(m.teamOf(me)) ? m.side2() : m.side1();
             list.add(listRow("vs " + opponent, new Span(m.eventName() + " · " + m.roundName()),
                     m.winner() == null ? badge("To be played")
                             : badge("Awaiting confirmation", BadgeVariant.WARNING)));
@@ -108,7 +108,8 @@ public class PlayerHomeView extends MobileHomeLayout {
                 .collect(Collectors.groupingBy(Match::eventId));
         long stillIn = myDraws.stream()
                 .filter(d -> !byEvent.containsKey(d.eventId())
-                        || !PlayerMatchesView.eliminated(byEvent.get(d.eventId()), me))
+                        || !PlayerMatchesView.eliminated(byEvent.get(d.eventId()),
+                                byEvent.get(d.eventId()).getFirst().teamOf(me)))
                 .count();
         String events = myDraws.isEmpty() ? "None yet"
                 : myDraws.size() + " entered · " + stillIn + " still in";

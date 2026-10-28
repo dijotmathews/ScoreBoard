@@ -111,9 +111,11 @@ public class PlayerDrawsView extends MobileHomeLayout {
             status.add(PlayerUi.badge("In progress"));
             summary.setText(players + " players · " + played + " of " + knockout.size() + " matches played");
         }
-        boolean inDraw = knockout.stream().anyMatch(m -> me.equals(m.player1()) || me.equals(m.player2()));
-        note.setVisible(inDraw);
-        bracket.add(new Html(BracketSvg.render(knockout, Objects.requireNonNull(me))));
+        // In doubles the bracket shows the player's team by its lead.
+        String mySide = knockout.stream().filter(m -> m.round() == 1).map(m -> m.teamOf(me))
+                .filter(Objects::nonNull).findFirst().orElse(null);
+        note.setVisible(mySide != null);
+        bracket.add(new Html(BracketSvg.render(knockout, mySide)));
     }
 
     private static Div emptyState(String text) {

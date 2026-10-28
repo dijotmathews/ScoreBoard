@@ -46,6 +46,7 @@ public class AdminDrawView extends VerticalLayout implements HasUrlParameter<Str
     private final Div header = new Div();
     private final Div stats = new Div();
     private final Grid<DrawSlot> grid = new Grid<>(DrawSlot.class, false);
+    private final Grid.Column<DrawSlot> partnerColumn;
     private Event event;
     private List<Player> unplaced = List.of();
     private Runnable unsubscribe;
@@ -64,6 +65,8 @@ public class AdminDrawView extends VerticalLayout implements HasUrlParameter<Str
 
         grid.addColumn(DrawSlot::slot).setHeader("Slot").setAutoWidth(true).setFlexGrow(0);
         grid.addComponentColumn(this::playerPicker).setHeader("Player").setFlexGrow(1);
+        // Shown for doubles events only.
+        partnerColumn = grid.addComponentColumn(this::partnerPicker).setHeader("Partner").setFlexGrow(1);
         grid.addComponentColumn(this::removeButton).setAutoWidth(true).setFlexGrow(0);
         // Shade every other first-round pair so each match reads as a unit.
         grid.setPartNameGenerator(slot -> ((slot.slot() + 1) / 2) % 2 == 0 ? "match-alt" : null);
@@ -127,6 +130,36 @@ public class AdminDrawView extends VerticalLayout implements HasUrlParameter<Str
         return picker;
     }
 
+    /** Doubles: the partner of the slot's player, chosen once the player is placed. */
+    private ComboBox<Choice> partnerPicker(DrawSlot slot) {
+        List<Choice> choices = new ArrayList<>();
+        Choice current = slot.partnerUsername() == null ? null
+                : new Choice(slot.partnerUsername(), slot.partnerName());
+        if (current != null) choices.add(current);
+        unplaced.forEach(player -> choices.add(new Choice(player.username(), player.name())));
+
+        ComboBox<Choice> picker = new ComboBox<>();
+        picker.setItems(choices);
+        picker.setItemLabelGenerator(Choice::pickerLabel);
+        picker.setValue(current);
+        picker.setPlaceholder(slot.playerUsername() == null ? "—" : "Choose a partner");
+        picker.setClearButtonVisible(true);
+        picker.setReadOnly(event.drawLocked());
+        picker.setEnabled(slot.playerUsername() != null);
+        picker.setWidthFull();
+        picker.getStyle().set("max-width", "420px");
+        picker.setAriaLabel("Partner for slot " + slot.slot());
+        picker.addValueChangeListener(e -> {
+            if (!e.isFromClient()) return;
+            Choice choice = e.getValue();
+            boolean ok = choice == null ? run(() -> draws.clearPartner(event.id(), slot.slot()))
+                    : run(() -> draws.assignPartner(event.id(), slot.slot(), choice.player()));
+            reload();
+            if (ok && choice != null) notify(choice.label() + " partners " + slot.playerName());
+        });
+        return picker;
+    }
+
     private Button removeButton(DrawSlot slot) {
         Button remove = new Button(VaadinIcon.CLOSE_SMALL.create(), e -> {
             if (run(() -> draws.clearSlot(event.id(), slot.slot()))) reload();
@@ -150,7 +183,10 @@ public class AdminDrawView extends VerticalLayout implements HasUrlParameter<Str
         event = events.event(event.id()).orElse(event);  // pick up lock changes
         List<DrawSlot> slots = draws.draw(event.id());
         unplaced = draws.unplacedPlayers(event.id());
+        partnerColumn.setVisible(event.doubles());
         grid.setItems(slots);
+        long noPartner = !event.doubles() ? 0
+                : slots.stream().filter(s -> s.playerUsername() != null && s.partnerUsername() == null).count();
 
         long filled = slots.stream().filter(s -> !s.empty()).count();
         long byes = slots.stream().filter(DrawSlot::bye).count();
@@ -171,14 +207,19 @@ public class AdminDrawView extends VerticalLayout implements HasUrlParameter<Str
             Button lock = new Button("Lock draw", VaadinIcon.LOCK.create(), e -> lockDraw());
             lock.addThemeVariants(ButtonVariant.PRIMARY);
             header.add(PlayerUi.pageHeader("Draw: " + event.name(),
-                    "Place a signed-up player or a BYE in every slot, then lock the draw.",
+                    event.doubles()
+                            ? "Place a team (a signed-up player and a partner) or a BYE in every slot, then lock the draw."
+                            : "Place a signed-up player or a BYE in every slot, then lock the draw.",
                     clear, lock));
         }
 
         stats.add(PlayerUi.statTile("Status", locked ? "Locked" : "Open",
-                        locked ? "matches created" : filled == slots.size() ? "ready to lock" : "being filled"),
+                        locked ? "matches created"
+                                : filled == slots.size() && noPartner == 0 ? "ready to lock" : "being filled"),
                 PlayerUi.statTile("Slots filled", String.valueOf(filled), "of " + slots.size() + " slots"),
-                PlayerUi.statTile("Players placed", String.valueOf(filled - byes), null),
+                PlayerUi.statTile(event.doubles() ? "Teams placed" : "Players placed",
+                        String.valueOf(filled - byes), event.doubles() && noPartner > 0
+                                ? noPartner + (noPartner == 1 ? " needs a partner" : " need a partner") : null),
                 PlayerUi.statTile("BYEs", String.valueOf(byes), null),
                 PlayerUi.statTile("Still to place", String.valueOf(unplaced.size()), "signed-up players"));
     }

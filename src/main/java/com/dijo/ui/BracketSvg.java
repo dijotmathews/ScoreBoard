@@ -1,9 +1,13 @@
 package com.dijo.ui;
 
 import com.dijo.events.Match;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Draws a knockout bracket as SVG, in the style of a printed tournament draw:
@@ -19,7 +23,8 @@ final class BracketSvg {
     private static final int HEADER = 30;
     private static final int FIRST_COLUMN = 200;
     private static final int COLUMN = 170;
-    private static final int MAX_NAME = 24;
+    private static final int MAX_NAME = 24;          // per player; a doubles team shows two
+    private static final double CHAR_WIDTH = 7.2;     // average width of a 13px character
     private static final int TITLE = 44;          // title band of the shareable image
     private static final int PAD = 16;            // margin around the shareable image
 
@@ -60,7 +65,14 @@ final class BracketSvg {
         int slots = 1 << rounds;
         int left = standalone ? PAD : 0;
         int top = standalone ? PAD + TITLE : 0;
-        int width = FIRST_COLUMN + COLUMN * rounds + 10 + 2 * left;
+        // Columns widen to fit the longest name, e.g. a doubles team.
+        int longest = matches.stream()
+                .flatMap(m -> Stream.of(m.player1Name(), m.player2Name(), m.winnerName()))
+                .filter(Objects::nonNull).mapToInt(n -> shorten(n).length()).max().orElse(0);
+        int nameWidth = (int) Math.ceil(longest * CHAR_WIDTH) + 16;
+        int firstColumn = Math.max(FIRST_COLUMN, nameWidth);
+        int nextColumns = Math.max(COLUMN, nameWidth);
+        int width = firstColumn + nextColumns * rounds + 10 + 2 * left;
         int height = top + HEADER + slots * ROW + 10 + left;
         Match[][] byRound = new Match[rounds + 1][];
         for (int r = 1; r <= rounds; r++) byRound[r] = new Match[slots >> r];
@@ -85,7 +97,7 @@ final class BracketSvg {
         for (int i = 0; i < slots; i++) y[i] = top + HEADER + (i + 0.5) * ROW;
         int x = left;
         for (int column = 0; column <= rounds; column++) {
-            int w = column == 0 ? FIRST_COLUMN : COLUMN;
+            int w = column == 0 ? firstColumn : nextColumns;
             header(svg, look, x, top + 18,
                     column == rounds ? "Champion" : byRound[column + 1][0].roundName());
             int entries = slots >> column;
@@ -163,8 +175,11 @@ final class BracketSvg {
                 x, y, look.accent()));
     }
 
+    /** Shortens each player's name of a team ("Ada & Bob") on its own. */
     private static String shorten(String value) {
-        return value.length() <= MAX_NAME ? value : value.substring(0, MAX_NAME - 1) + "…";
+        return Arrays.stream(value.split(" & ", -1))
+                .map(name -> name.length() <= MAX_NAME ? name : name.substring(0, MAX_NAME - 1) + "…")
+                .collect(Collectors.joining(" & "));
     }
 
     private static String escape(String value) {

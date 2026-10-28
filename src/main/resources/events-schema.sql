@@ -5,16 +5,22 @@ CREATE TABLE IF NOT EXISTS events (
     contestant_count INTEGER NOT NULL
         CHECK(contestant_count >= 2 AND (contestant_count & (contestant_count - 1)) = 0),
     -- A locked draw cannot be changed until it is unlocked.
-    draw_locked INTEGER NOT NULL DEFAULT 0 CHECK(draw_locked IN (0, 1))
+    draw_locked INTEGER NOT NULL DEFAULT 0 CHECK(draw_locked IN (0, 1)),
+    -- Players per side: 1 for singles, 2 for doubles. Fixed when the event is created.
+    team_size INTEGER NOT NULL DEFAULT 1 CHECK(team_size IN (1, 2))
 );
 -- A signed-up player takes part in an event by holding a slot in its draw.
--- A slot holds a player, a BYE, or nothing yet.
+-- A slot holds a player, a BYE, or nothing yet. In doubles the player leads a team
+-- with partner_username; matches and results refer to the team by its lead.
 CREATE TABLE IF NOT EXISTS draw_slots (
     event_id TEXT NOT NULL REFERENCES events(id),
     slot INTEGER NOT NULL CHECK(slot >= 1),
     player_username TEXT REFERENCES users(username),
     is_bye INTEGER NOT NULL DEFAULT 0
         CHECK(is_bye IN (0, 1) AND (is_bye = 0 OR player_username IS NULL)),
+    partner_username TEXT REFERENCES users(username)
+        CHECK(partner_username IS NULL
+              OR (player_username IS NOT NULL AND partner_username <> player_username)),
     PRIMARY KEY(event_id, slot),
     UNIQUE(event_id, player_username)
 );

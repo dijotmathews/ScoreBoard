@@ -17,3 +17,9 @@ app.db
 
 .playwright-mcp
 .mcp.json
+
+# Terraform (the provider lock file infra/.terraform.lock.hcl is committed)
+infra/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan

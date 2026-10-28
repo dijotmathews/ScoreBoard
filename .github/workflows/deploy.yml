@@ -1,0 +1,88 @@
+name: Deploy
+
+# Tests, builds the linux/arm64 image, pushes it to ECR as <git sha>, then runs
+# /opt/scoreboard/deploy.sh on the server through SSM (see infra/README.md).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # sign in to AWS with OIDC
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: scoreboard
+  SERVER_NAME_TAG: scoreboard
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - run: ./mvnw -B test
+
+  deploy:
+    needs: test
+    # Skipped until infra/README.md step 5 sets the variable.
+    if: vars.AWS_DEPLOY_ROLE_ARN != ''
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy on the server
+        run: |
+          command_id=$(aws ssm send-command \
+            --document-name AWS-RunShellScript \
+            --targets "Key=tag:Name,Values=$SERVER_NAME_TAG" \
+            --parameters "commands=/opt/scoreboard/deploy.sh $GITHUB_SHA" \
+            --timeout-seconds 600 \
+            --comment "Deploy $GITHUB_SHA" \
+            --query Command.CommandId --output text)
+          echo "SSM command $command_id"
+
+          # Wait for the server to pick the command up and finish it.
+          for _ in $(seq 1 120); do
+            status=$(aws ssm list-command-invocations --command-id "$command_id" \
+              --query 'CommandInvocations[0].Status' --output text)
+            case "$status" in
+              Pending|InProgress|Delayed|None|"") sleep 5 ;;
+              *) break ;;
+            esac
+          done
+
+          aws ssm list-command-invocations --command-id "$command_id" --details \
+            --query 'CommandInvocations[0].CommandPlugins[0].Output' --output text
+          echo "Status: $status"
+          [ "$status" = "Success" ]

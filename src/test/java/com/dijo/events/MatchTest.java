@@ -10,7 +10,17 @@ class MatchTest {
     private static Match match(int totalRounds, int round, String p1, boolean bye1, String p2, boolean bye2,
             String winner, String confirmedBy) {
         return new Match("e", "Singles", totalRounds, round, 1, p1, p1, bye1, p2, p2, bye2,
-                null, winner, winner, null, null, confirmedBy, null, null);
+                null, winner, winner, null, null, confirmedBy, null, null, null, null);
+    }
+
+    @Test
+    void findsThePlayersSideByItsLead() {
+        Match doubles = new Match("e", "Doubles", 1, 1, 1, "ada", "ada & bob", false, "cy", "cy & dee", false,
+                null, null, null, null, null, null, null, null, "bob", "dee");
+        assertThat(doubles.teamOf("ada")).isEqualTo("ada");
+        assertThat(doubles.teamOf("bob")).isEqualTo("ada");
+        assertThat(doubles.teamOf("dee")).isEqualTo("cy");
+        assertThat(doubles.teamOf("eve")).isNull();
     }
 
     @Test

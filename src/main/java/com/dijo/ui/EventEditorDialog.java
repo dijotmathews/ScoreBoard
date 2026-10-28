@@ -14,12 +14,16 @@ import com.vaadin.flow.component.textfield.TextField;
 
 /** Create an event, or update/delete the selected one. */
 class EventEditorDialog extends Dialog {
+    private static final String SINGLES = "Singles";
+    private static final String DOUBLES = "Doubles";
+
     private final EventService service;
     private final EventSummary current;
     private final Runnable onChange;
 
     private final TextField name = new TextField("Event name");
     private final Select<Integer> contestants = new Select<>();
+    private final Select<String> type = new Select<>();
 
     /** current == null opens the dialog in create mode. */
     EventEditorDialog(EventService service, EventSummary current, Runnable onChange) {
@@ -31,16 +35,24 @@ class EventEditorDialog extends Dialog {
         setHeaderTitle(creating ? "New event" : "Event: " + current.event().name());
         setWidth("min(560px, 100vw)");
 
+        type.setLabel("Type");
+        type.setItems(SINGLES, DOUBLES);
+        type.setHelperText(creating ? "Doubles teams have two players; this cannot be changed later"
+                : "Fixed when the event was created");
+        type.setReadOnly(!creating);
+
         contestants.setLabel("Contestants (draw size)");
         contestants.setItems(EventService.CONTESTANT_SIZES);
         contestants.setHelperText(creating ? "An empty draw of this size is created"
                 : "Changing it rebuilds the empty draw");
 
         if (creating) {
+            type.setValue(SINGLES);
             contestants.setValue(16);
         } else {
             var event = current.event();
             name.setValue(event.name());
+            type.setValue(event.doubles() ? DOUBLES : SINGLES);
             contestants.setValue(event.contestantCount());
             if (current.filled() > 0) {
                 contestants.setReadOnly(true);
@@ -48,9 +60,10 @@ class EventEditorDialog extends Dialog {
             }
         }
 
-        FormLayout form = new FormLayout(name, contestants);
+        FormLayout form = new FormLayout(name, type, contestants);
         form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1),
                 new FormLayout.ResponsiveStep("400px", 2));
+        form.setColspan(name, 2);
         add(form);
 
         Button save = new Button(creating ? "Create" : "Save", e -> save());
@@ -76,7 +89,8 @@ class EventEditorDialog extends Dialog {
                 throw new IllegalArgumentException("Choose the number of contestants");
             }
             if (current == null) {
-                service.createEvent(name.getValue().strip(), contestants.getValue());
+                service.createEvent(name.getValue().strip(), contestants.getValue(),
+                        DOUBLES.equals(type.getValue()));
             } else {
                 service.updateEvent(current.event().id(), name.getValue().strip(),
                         contestants.getValue());

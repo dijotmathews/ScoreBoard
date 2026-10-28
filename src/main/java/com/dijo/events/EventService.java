@@ -19,7 +19,8 @@ public class EventService {
             n -> n <= MAX_CONTESTANTS, n -> n * 2).boxed().toList();
 
     private static final RowMapper<Event> EVENT = (rs, row) -> new Event(rs.getString("id"),
-            rs.getString("name"), rs.getInt("contestant_count"), rs.getBoolean("draw_locked"));
+            rs.getString("name"), rs.getInt("contestant_count"), rs.getBoolean("draw_locked"),
+            rs.getInt("team_size"));
 
     private final JdbcTemplate jdbc;
     private final EventUpdates updates;
@@ -51,13 +52,21 @@ public class EventService {
                 """, (rs, row) -> new EventSummary(EVENT.mapRow(rs, row), rs.getInt("filled")));
     }
 
+    /** A singles event. */
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
     public String createEvent(String name, int contestantCount) {
+        return createEvent(name, contestantCount, false);
+    }
+
+    /** A singles or doubles event; the type cannot be changed afterwards. */
+    @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
+    public String createEvent(String name, int contestantCount, boolean doubles) {
         validate(name, contestantCount);
         String id = UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO events(id, name, contestant_count) VALUES (?, ?, ?)",
-                id, name, contestantCount);
+        jdbc.update("INSERT INTO events(id, name, contestant_count, team_size) VALUES (?, ?, ?, ?)",
+                id, name, contestantCount, doubles ? 2 : 1);
         createEmptyDraw(id);
         return id;
     }

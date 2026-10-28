@@ -9,12 +9,15 @@ import java.time.LocalTime;
  * confirms the result. Players are identified by username; player1Name, player2Name
  * and winnerName are how they are shown (their full name, else the username).
  * court and startTime say where and when it is to be played; either may be null.
+ * In doubles a side is a team: player1/player2 lead it, with player1Partner and
+ * player2Partner, and the names are the team's ("Ada & Bob").
  */
 public record Match(String eventId, String eventName, int totalRounds, int round, int matchNo,
                     String player1, String player1Name, boolean player1Bye,
                     String player2, String player2Name, boolean player2Bye,
                     String official, String winner, String winnerName, String score,
-                    String resultBy, String confirmedBy, String court, LocalTime startTime) {
+                    String resultBy, String confirmedBy, String court, LocalTime startTime,
+                    String player1Partner, String player2Partner) {
 
     public enum Status { WAITING_FOR_PLAYERS, SCHEDULED, AWAITING_CONFIRMATION, CONFIRMED, NO_MATCH }
 
@@ -63,6 +66,17 @@ public record Match(String eventId, String eventName, int totalRounds, int round
         if (player.equals(player1)) return player1Name;
         if (player.equals(player2)) return player2Name;
         return player.equals(winner) ? winnerName : player;
+    }
+
+    /**
+     * The side a player is on, as that side's lead username (what winner holds):
+     * the player themselves, or their team's lead in doubles. Null when not in this match.
+     */
+    public String teamOf(String player) {
+        if (player == null) return null;
+        if (player.equals(player1) || player.equals(player1Partner)) return player1;
+        if (player.equals(player2) || player.equals(player2Partner)) return player2;
+        return null;
     }
 
     private static String side(String name, boolean bye) {

@@ -1,0 +1,51 @@
+# Written to /opt/scoreboard/compose.yml; deploy.sh writes the .env it reads.
+name: scoreboard
+
+x-litestream: &litestream
+  image: litestream/litestream:0.3.13
+  user: "10001:10001"
+  volumes:
+    - /data:/data
+    - ./litestream.yml:/etc/litestream.yml:ro
+
+services:
+  # On a new, empty data volume, brings app.db back from the S3 backup if there is one.
+  restore:
+    <<: *litestream
+    command: restore -config /etc/litestream.yml -if-db-not-exists -if-replica-exists /data/app.db
+    restart: "no"
+
+  app:
+    image: ${IMAGE}
+    depends_on:
+      restore:
+        condition: service_completed_successfully
+    ports:
+      - "80:8080"
+    environment:
+      APP_BOOTSTRAP_ADMIN_PASSWORD: ${APP_BOOTSTRAP_ADMIN_PASSWORD}
+    volumes:
+      - /data:/data
+    restart: unless-stopped
+    stop_grace_period: 30s
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${REGION}
+        awslogs-group: ${LOG_GROUP}
+        awslogs-stream: app
+
+  # Streams every change to app.db to S3.
+  litestream:
+    <<: *litestream
+    command: replicate -config /etc/litestream.yml
+    depends_on:
+      app:
+        condition: service_started
+    restart: unless-stopped
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${REGION}
+        awslogs-group: ${LOG_GROUP}
+        awslogs-stream: litestream

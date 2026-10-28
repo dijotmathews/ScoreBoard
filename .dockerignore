@@ -1,0 +1,16 @@
+# Keep local data, build output and editor files out of the image.
+*.db
+*.db-*
+target/
+node_modules/
+src/main/frontend/generated/
+vite.generated.ts
+.git/
+.idea/
+.vscode/
+.claude/
+.playwright-mcp/
+.mcp.json
+infra/
+*.iml
+.DS_Store

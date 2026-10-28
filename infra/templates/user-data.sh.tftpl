@@ -1,0 +1,76 @@
+#!/bin/bash
+# First boot of the ScoreBoard server (Amazon Linux 2023, arm64): Docker, the data
+# volume at /data, and the files in /opt/scoreboard. A systemd unit then runs deploy.sh,
+# which starts the image last deployed (if any). GitHub Actions deploys new images.
+set -euxo pipefail
+
+dnf install -y docker
+mkdir -p /usr/libexec/docker/cli-plugins
+curl -fsSL -o /usr/libexec/docker/cli-plugins/docker-compose \
+  "https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-$(uname -m)"
+chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+systemctl enable --now docker
+
+# The EBS data volume shows up as an NVMe disk whose serial is the volume id without "-".
+# It is attached after the instance starts, so wait for it.
+volume="${data_volume_id}"
+serial="$${volume//-/}"
+device=""
+for _ in $(seq 1 120); do
+  device=$(lsblk -dno NAME,SERIAL | awk -v s="$serial" '$2 == s { print "/dev/" $1 }')
+  [ -n "$device" ] && break
+  sleep 5
+done
+[ -n "$device" ] || { echo "Data volume $volume did not attach" >&2; exit 1; }
+
+# Format only a new, empty volume; a reattached one keeps app.db.
+blkid "$device" || mkfs.ext4 -L scoreboard-data "$device"
+mkdir -p /data
+uuid=$(blkid -s UUID -o value "$device")
+grep -q "$uuid" /etc/fstab || echo "UUID=$uuid /data ext4 defaults,nofail 0 2" >> /etc/fstab
+systemctl daemon-reload
+mount /data
+# The app and Litestream containers run as uid 10001 (see Dockerfile).
+chown 10001:10001 /data
+
+mkdir -p /opt/scoreboard
+cd /opt/scoreboard
+# Quoted, unique heredoc delimiters: the files are written verbatim, and deploy.sh has its own heredoc.
+cat > config.env <<'SCOREBOARD_FILE'
+REGION=${region}
+REGISTRY=${registry}
+IMAGE_REPOSITORY=${image}
+ADMIN_PARAMETER=${admin_parameter}
+LOG_GROUP=${log_group}
+SCOREBOARD_FILE
+
+cat > compose.yml <<'SCOREBOARD_FILE'
+${compose_file}
+SCOREBOARD_FILE
+
+cat > litestream.yml <<'SCOREBOARD_FILE'
+${litestream_yml}
+SCOREBOARD_FILE
+
+cat > deploy.sh <<'SCOREBOARD_FILE'
+${deploy_script}
+SCOREBOARD_FILE
+chmod 700 deploy.sh
+
+cat > /etc/systemd/system/scoreboard.service <<'EOF'
+[Unit]
+Description=ScoreBoard (starts the last deployed image)
+Requires=docker.service
+After=docker.service network-online.target data.mount
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/scoreboard/deploy.sh
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable --now scoreboard.service

@@ -1,30 +1,20 @@
-FROM ghcr.io/jqlang/jq:latest AS jq-stage
+# The jar is the same on every platform, so build it natively and only assemble the
+# runtime image for the target platform (linux/arm64 on AWS).
+FROM --platform=$BUILDPLATFORM eclipse-temurin:25-jdk AS build
+WORKDIR /build
+COPY . .
+# The app uses only free Vaadin components, so the production build needs no license key.
+RUN --mount=type=cache,target=/root/.m2 ./mvnw -B clean package -DskipTests
 
-FROM eclipse-temurin:25-jdk AS build
-COPY --from=jq-stage /jq /usr/bin/jq
-# Test that jq works after copying
-RUN jq --version
-
-ENV HOME=/app
-RUN mkdir -p $HOME
-WORKDIR $HOME
-COPY . $HOME
-
-# If you have a Vaadin Pro key, pass it as a secret with id "proKey":
-#
-#   $ docker build --secret id=proKey,src=$HOME/.vaadin/proKey .
-#
-# If you have a Vaadin Offline key, pass it as a secret with id "offlineKey":
-#
-#   $ docker build --secret id=offlineKey,src=$HOME/.vaadin/offlineKey .
-
-RUN --mount=type=cache,target=/root/.m2 \
-    --mount=type=secret,id=proKey \
-    --mount=type=secret,id=offlineKey \
-    sh -c 'PRO_KEY=$(jq -r ".proKey // empty" /run/secrets/proKey 2>/dev/null || echo "") && \
-    OFFLINE_KEY=$(cat /run/secrets/offlineKey 2>/dev/null || echo "") && \
-    ./mvnw clean package -DskipTests -Dvaadin.proKey=${PRO_KEY} -Dvaadin.offlineKey=${OFFLINE_KEY}'
-
-FROM eclipse-temurin:25-jre-alpine
-COPY --from=build /app/target/*.jar app.jar
-ENTRYPOINT ["java", "-jar", "/app.jar", "--spring.profiles.active=prod"]
+FROM eclipse-temurin:25-jre
+# A fixed uid, so the host's data volume can be owned by it (see infra/templates).
+RUN groupadd --system --gid 10001 app && useradd --system --uid 10001 --gid app --home /app app \
+    && mkdir -p /data && chown app:app /data
+COPY --from=build /build/target/*.jar /app/app.jar
+USER app
+# app.db lives here; mount a volume so it survives new containers.
+VOLUME /data
+ENV PORT=8080 APP_DATA_DIR=/data
+EXPOSE 8080
+ENTRYPOINT ["java", "--enable-native-access=ALL-UNNAMED", "-XX:MaxRAMPercentage=70", \
+    "-jar", "/app/app.jar", "--spring.profiles.active=prod"]

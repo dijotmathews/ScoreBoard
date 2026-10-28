@@ -31,17 +31,25 @@ public class MatchService {
             rs.getString("official"), rs.getString("winner"), rs.getString("winner_name"),
             rs.getString("score"),
             rs.getString("result_by"), rs.getString("confirmed_by"), rs.getString("court"),
-            rs.getString("start_time") == null ? null : LocalTime.parse(rs.getString("start_time")));
+            rs.getString("start_time") == null ? null : LocalTime.parse(rs.getString("start_time")),
+            rs.getString("player1_partner"), rs.getString("player2_partner"));
+    /** Sides are shown as teams ("Ada & Bob") in doubles, the partner coming from the draw. */
     private static final String SELECT = """
             SELECT m.*, e.name AS event_name, e.contestant_count,
-                   COALESCE(p1.full_name, p1.username) AS player1_name,
-                   COALESCE(p2.full_name, p2.username) AS player2_name,
-                   COALESCE(w.full_name, w.username) AS winner_name
+                   s1.partner_username AS player1_partner, s2.partner_username AS player2_partner,
+                   %s AS player1_name, %s AS player2_name, %s AS winner_name
             FROM matches m JOIN events e ON e.id = m.event_id
             LEFT JOIN users p1 ON p1.username = m.player1
             LEFT JOIN users p2 ON p2.username = m.player2
             LEFT JOIN users w ON w.username = m.winner
-            """;
+            LEFT JOIN draw_slots s1 ON s1.event_id = m.event_id AND s1.player_username = m.player1
+            LEFT JOIN draw_slots s2 ON s2.event_id = m.event_id AND s2.player_username = m.player2
+            LEFT JOIN draw_slots sw ON sw.event_id = m.event_id AND sw.player_username = m.winner
+            LEFT JOIN users q1 ON q1.username = s1.partner_username
+            LEFT JOIN users q2 ON q2.username = s2.partner_username
+            LEFT JOIN users qw ON qw.username = sw.partner_username
+            """.formatted(DrawService.teamName("p1", "q1"), DrawService.teamName("p2", "q2"),
+                    DrawService.teamName("w", "qw"));
 
     private final JdbcTemplate jdbc;
     private final EventUpdates updates;
@@ -121,13 +129,15 @@ public class MatchService {
                 + " ORDER BY m.round, m.match_no", MATCH, eventId);
     }
 
-    /** Matches the signed-in player plays in, across all events, in round order. */
+    /** Matches the signed-in player plays in (as a player or a partner), across all events, in round order. */
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('USER')")
     public List<Match> myPlayerMatches() {
         String me = actor();
-        return jdbc.query(SELECT + " WHERE m.player1 = ? OR m.player2 = ? ORDER BY e.name, m.round",
-                MATCH, me, me);
+        return jdbc.query(SELECT + """
+                 WHERE ? IN (m.player1, m.player2, s1.partner_username, s2.partner_username)
+                 ORDER BY e.name, m.round
+                """, MATCH, me);
     }
 
     /** Enabled accounts with ROLE_OFFICIAL. */
