@@ -14,6 +14,10 @@ output "dns_records" {
   }
 }
 
+output "region" {
+  value = var.region
+}
+
 output "url" {
   value = "https://${var.domain_name}"
 }

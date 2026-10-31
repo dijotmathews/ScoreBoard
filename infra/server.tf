@@ -154,19 +154,19 @@ resource "aws_instance" "server" {
   }
 }
 
-# The database disk outlives the instance: replacing the server reattaches it.
+# The database disk outlives the instance: replacing the server reattaches it. Deleting it
+# (terraform destroy, see destroy.sh) leaves a final snapshot holding app.db.
 resource "aws_ebs_volume" "data" {
   availability_zone = data.aws_subnet.server.availability_zone
   size              = var.data_volume_size
   type              = "gp3"
   encrypted         = true
 
+  final_snapshot = true
+  snapshot_id    = var.data_snapshot_id == "" ? null : var.data_snapshot_id
+
   tags = {
     Name = "${var.name}-data"
-  }
-
-  lifecycle {
-    prevent_destroy = true
   }
 }
 

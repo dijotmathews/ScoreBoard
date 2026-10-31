@@ -76,8 +76,7 @@ daily snapshots for 7 days, and S3 keeps replaced files for 30 days.
 - **New server, same data volume** (the usual case, e.g. after changing the boot script): nothing to do.
 - **Lost data volume:** the compose `restore` step brings `app.db` back from S3 when
   `/data/app.db` is missing. Recreate the volume and replace the server:
-  `terraform apply -replace=aws_ebs_volume.data -replace=aws_instance.server`. First remove
-  `prevent_destroy` from the `aws_ebs_volume.data` resource.
+  `terraform apply -replace=aws_ebs_volume.data -replace=aws_instance.server`.
 - **Back to a point in time** on the server:
   ```bash
   cd /opt/scoreboard && sudo docker compose stop app litestream
@@ -88,6 +87,30 @@ daily snapshots for 7 days, and S3 keeps replaced files for 30 days.
   ```
 
 Run a restore once on purpose before the tournament, to know that it works.
+
+## Tearing it all down
+
+```bash
+./destroy.sh        # add -var create_github_oidc_provider=false if you used it for apply
+```
+
+You confirm by typing the domain. The script then lets Terraform delete the ECR images and
+S3 backups (`allow_destroy=true`) and runs `terraform destroy`. Terraform shows the plan and
+asks once more. The server, CloudFront, the certificate, the backups, the admin password,
+the alarms and the GitHub role are all deleted.
+
+The data volume is deleted too, but AWS first takes a **final snapshot** of it, with `app.db`
+on it. The script prints its id and the steps left to do by hand:
+- delete the two GoDaddy CNAMEs;
+- delete the state bucket, if you are not coming back;
+- remove the `AWS_DEPLOY_ROLE_ARN` GitHub variable.
+
+To bring the site back later **with the old data**, follow the first-time setup again with
+`terraform apply -var data_snapshot_id=snap-…`. Add the GoDaddy records again, too: the
+certificate and the CloudFront address are new. Without the variable it starts empty.
+
+Running `terraform destroy` directly fails while the ECR repository holds images or the
+backup bucket holds files. That stops an accidental destroy from deleting them.
 
 ## Cost (ap-south-1, approximate)
 
