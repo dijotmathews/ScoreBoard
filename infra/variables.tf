@@ -51,3 +51,15 @@ variable "alarm_email" {
   type        = string
   default     = ""
 }
+
+variable "allow_destroy" {
+  description = "Lets terraform destroy delete the images in ECR and the backups in S3. Set by destroy.sh."
+  type        = bool
+  default     = false
+}
+
+variable "data_snapshot_id" {
+  description = "Create the data volume from this snapshot (e.g. the one destroy.sh leaves) instead of empty. Changing it replaces an existing volume."
+  type        = string
+  default     = ""
+}

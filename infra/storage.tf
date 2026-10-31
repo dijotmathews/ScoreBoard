@@ -3,6 +3,7 @@
 resource "aws_ecr_repository" "app" {
   name                 = var.name
   image_tag_mutability = "IMMUTABLE"
+  force_delete         = var.allow_destroy
 
   image_scanning_configuration {
     scan_on_push = true
@@ -28,6 +29,7 @@ resource "aws_ecr_lifecycle_policy" "app" {
 # Litestream streams app.db here continuously.
 resource "aws_s3_bucket" "backups" {
   bucket_prefix = "${var.name}-backups-"
+  force_destroy = var.allow_destroy
 }
 
 resource "aws_s3_bucket_public_access_block" "backups" {
