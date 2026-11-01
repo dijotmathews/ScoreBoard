@@ -11,7 +11,7 @@ resource "aws_acm_certificate" "site" {
   }
 }
 
-# Waits until the validation CNAME (output dns_records) is live at GoDaddy.
+# Waits until the validation CNAME (output certificate_validation_record) is live at GoDaddy.
 resource "aws_acm_certificate_validation" "site" {
   provider        = aws.us_east_1
   certificate_arn = aws_acm_certificate.site.arn

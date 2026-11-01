@@ -35,7 +35,7 @@ You need the AWS CLI (signed in as an administrator of the account) and Terrafor
 2. **Certificate request.** Create the certificate first, so you have its validation record:
    ```bash
    terraform apply -target=aws_acm_certificate.site
-   terraform output -json dns_records | jq .certificate_validation
+   terraform output certificate_validation_record
    ```
    At GoDaddy (DNS → Add record), add that **CNAME**. In GoDaddy's Name field, leave out
    the trailing `.enigma-tech.in.`, e.g. `_3f9a….scoreboard`.
@@ -48,7 +48,7 @@ You need the AWS CLI (signed in as an administrator of the account) and Terrafor
    takes about 5 minutes more.
 
 4. **Site record.** At GoDaddy, add a **CNAME** named `scoreboard` pointing to the
-   `dns_records.site.value` output (`d….cloudfront.net`).
+   `site_record` output's value (`d….cloudfront.net`).
 
 5. **GitHub.** In the repository settings, under Secrets and variables → Actions → Variables, add
    `AWS_DEPLOY_ROLE_ARN` = the `github_deploy_role_arn` output. Then push to `main` (or run

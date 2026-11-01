@@ -13,6 +13,11 @@ data "aws_iam_openid_connect_provider" "github" {
 }
 
 locals {
+  # owner@owner_id/name@repository_id, as in the newer OIDC subject format.
+  github_owner               = split("/", var.github_repository)[0]
+  github_name                = split("/", var.github_repository)[1]
+  github_repository_with_ids = "${local.github_owner}@${var.github_owner_id}/${local.github_name}@${var.github_repository_id}"
+
   github_oidc_arn = var.create_github_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : data.aws_iam_openid_connect_provider.github[0].arn
 }
 
@@ -27,7 +32,11 @@ resource "aws_iam_role" "github_deploy" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository}:ref:refs/heads/main"
+          # GitHub sends either subject format, the newer one with the owner and repository ids.
+          "token.actions.githubusercontent.com:sub" = [
+            "repo:${var.github_repository}:ref:refs/heads/main",
+            "repo:${local.github_repository_with_ids}:ref:refs/heads/main",
+          ]
         }
       }
     }]

@@ -1,16 +1,19 @@
-output "dns_records" {
-  description = "CNAME records to add at GoDaddy: first the validation record, then the site record."
+# Only depends on the certificate, so it is saved by the first, targeted apply (README step 2).
+output "certificate_validation_record" {
+  description = "CNAME to add at GoDaddy before the full apply. In GoDaddy's Name field, leave out .enigma-tech.in."
+  value = [for o in aws_acm_certificate.site.domain_validation_options : {
+    type  = o.resource_record_type
+    name  = o.resource_record_name
+    value = o.resource_record_value
+  }]
+}
+
+output "site_record" {
+  description = "CNAME to add at GoDaddy after the full apply."
   value = {
-    certificate_validation = [for o in aws_acm_certificate.site.domain_validation_options : {
-      type  = o.resource_record_type
-      name  = o.resource_record_name
-      value = o.resource_record_value
-    }]
-    site = {
-      type  = "CNAME"
-      name  = var.domain_name
-      value = aws_cloudfront_distribution.site.domain_name
-    }
+    type  = "CNAME"
+    name  = var.domain_name
+    value = aws_cloudfront_distribution.site.domain_name
   }
 }
 

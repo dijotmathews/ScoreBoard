@@ -34,6 +34,18 @@ variable "github_repository" {
   default     = "dijotmathews/ScoreBoard"
 }
 
+variable "github_owner_id" {
+  description = "Numeric id of the repository owner (https://api.github.com/repos/OWNER/NAME → owner.id)."
+  type        = string
+  default     = "51561664"
+}
+
+variable "github_repository_id" {
+  description = "Numeric id of the repository (https://api.github.com/repos/OWNER/NAME → id)."
+  type        = string
+  default     = "1408178284"
+}
+
 variable "create_github_oidc_provider" {
   description = "Set to false if the account already has the token.actions.githubusercontent.com provider."
   type        = bool
