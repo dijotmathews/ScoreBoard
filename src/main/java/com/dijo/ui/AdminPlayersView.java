@@ -5,6 +5,7 @@ import static com.dijo.ui.PlayerUi.badge;
 import com.dijo.benefits.PlayerAccountService;
 import com.dijo.benefits.PlayerBenefitsService;
 import com.dijo.benefits.PlayerBenefitsService.PlayerBenefitRow;
+import com.dijo.benefits.PlayerImportService;
 import com.vaadin.flow.component.avatar.Avatar;
 import com.vaadin.flow.component.badge.BadgeVariant;
 import com.vaadin.flow.component.button.Button;
@@ -48,6 +49,7 @@ public class AdminPlayersView extends VerticalLayout {
 
     private final PlayerBenefitsService service;
     private final PlayerAccountService accounts;
+    private final PlayerImportService importer;
     private final TextField search = new TextField();
     private final Select<Show> show = new Select<>();
     private final Div stats = new Div();
@@ -55,19 +57,23 @@ public class AdminPlayersView extends VerticalLayout {
     private final Grid<PlayerBenefitRow> grid = new Grid<>(PlayerBenefitRow.class, false);
     private List<PlayerBenefitRow> rows = List.of();
 
-    public AdminPlayersView(PlayerBenefitsService service, PlayerAccountService accounts) {
+    public AdminPlayersView(PlayerBenefitsService service, PlayerAccountService accounts,
+            PlayerImportService importer) {
         this.service = service;
         this.accounts = accounts;
+        this.importer = importer;
         setSizeFull();
         getStyle().set("box-sizing", "border-box");
 
         // Header: title and description, page actions on the right.
         Button settings = new Button("Benefit settings", VaadinIcon.COG.create(),
                 e -> new BenefitSettingsDialog(service, this::reloadRows).open());
+        Button importCsv = new Button("Import CSV", VaadinIcon.UPLOAD.create(),
+                e -> new PlayerImportDialog(importer, this::reloadRows).open());
         Button newPlayer = new Button("New player", VaadinIcon.PLUS.create(), e -> openEditor(null));
         newPlayer.addThemeVariants(ButtonVariant.PRIMARY);
         Div header = PlayerUi.pageHeader("Players and Benefits",
-                "Player accounts, entry fee sign-ups, welcome kits and coupons.", settings, newPlayer);
+                "Player accounts, entry fee sign-ups, welcome kits and coupons.", settings, importCsv, newPlayer);
 
         stats.addClassName("stat-tiles");
 
