@@ -63,6 +63,22 @@ public class PlayerBenefitsService {
     @PreAuthorize("hasAnyRole('ADMIN', 'OFFICIAL')")
     public Benefits confirmPayment(String playerUsername, String paymentReference,
                                    long amountPaise) {
+        return recordPayment(playerUsername, paymentReference, amountPaise, true);
+    }
+
+    /**
+     * Record a payment taken outside the app (e.g. the registration form) for whatever
+     * amount was paid, which may differ from the entry fee; still requires the fee to be set.
+     */
+    @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
+    public Benefits recordImportedPayment(String playerUsername, String paymentReference,
+                                          long amountPaise) {
+        return recordPayment(playerUsername, paymentReference, amountPaise, false);
+    }
+
+    private Benefits recordPayment(String playerUsername, String paymentReference,
+                                   long amountPaise, boolean mustMatchFee) {
         requireText(playerUsername, "Player username");
         requireText(paymentReference, "Payment reference");
         if (amountPaise <= 0) throw new IllegalArgumentException("Invalid amount");
@@ -76,12 +92,12 @@ public class PlayerBenefitsService {
                  confirmed_by, confirmed_at)
                 SELECT ?, u.username, ?, ?, ?, ?
                 FROM users u JOIN benefit_settings s ON s.id = 1
-                WHERE u.username = ? AND s.fee_paise = ? AND u.enabled = 1
+                WHERE u.username = ? AND (? = 0 OR s.fee_paise = ?) AND u.enabled = 1
                 AND EXISTS (SELECT 1 FROM authorities a
                             WHERE a.username = u.username AND a.authority = 'ROLE_USER')
                 ON CONFLICT DO NOTHING
                 """, id, paymentReference, amountPaise, actor(), Instant.now().toString(),
-                playerUsername, amountPaise);
+                playerUsername, mustMatchFee ? 1 : 0, amountPaise);
 
         if (inserted == 0) {
             var previous = jdbc.query("""
