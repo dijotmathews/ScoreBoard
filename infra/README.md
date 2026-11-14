@@ -88,6 +88,27 @@ daily snapshots for 7 days, and S3 keeps replaced files for 30 days.
 
 Run a restore once on purpose before the tournament, to know that it works.
 
+## Starting a new tournament
+
+After a tournament, clear the live database for the next one:
+
+```bash
+aws sso login --profile scoreboard   # if the session has expired
+./reset-tournament.sh                # optional: a local backup folder, default ~/scoreboard-backups
+```
+
+It asks you to type the domain, then, on the server through SSM:
+
+1. Stops the app and backs up `app.db` to `s3://<backup bucket>/manual/app-before-reset-<time>.db`.
+   Litestream's retention does not touch `manual/`, so these backups stay until you delete them.
+2. Deletes, in one transaction, every event (draws and matches), every payment, welcome kit and
+   coupon, the benefit settings, and every player account. Accounts with any role besides
+   `ROLE_USER` (admin, officials) are kept.
+3. Starts the app again and checks that it answers. It also downloads the backup to the local folder.
+
+The site is down for about a minute. Afterwards, sign in as admin and set the entry fee and
+coupons under Benefit settings. The script prints the commands to put the old database back.
+
 ## Tearing it all down
 
 ```bash
