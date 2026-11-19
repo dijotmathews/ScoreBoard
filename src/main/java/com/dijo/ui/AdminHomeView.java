@@ -8,12 +8,15 @@ import com.dijo.benefits.PlayerBenefitsService;
 import com.dijo.benefits.PlayerBenefitsService.PlayerBenefitRow;
 import com.dijo.events.EventService;
 import com.dijo.events.EventSummary;
+import com.dijo.events.EventUpdates;
 import com.dijo.events.Match;
 import com.dijo.events.MatchService;
 import com.dijo.events.MatchService.MatchTotals;
 import com.dijo.events.OfficialService;
 import com.dijo.events.OfficialService.Official;
+import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.badge.BadgeVariant;
 import com.vaadin.flow.component.card.Card;
 import com.vaadin.flow.component.html.Div;
@@ -36,9 +39,15 @@ import java.util.stream.Collectors;
 @PageTitle("Admin Home")
 @RolesAllowed("ADMIN")
 public class AdminHomeView extends VerticalLayout {
+    private final MatchService matches;
+    private final EventUpdates updates;
+    private final Div remaining = new Div();
+    private Runnable unsubscribe;
 
     public AdminHomeView(PlayerBenefitsService benefits, EventService events, MatchService matches,
-            OfficialService officials) {
+            OfficialService officials, EventUpdates updates) {
+        this.matches = matches;
+        this.updates = updates;
         RouterLink players = link(VaadinIcon.USERS, "Players and Benefits",
                 "Player accounts, entry fee sign-ups, welcome kits and coupons.", AdminPlayersView.class);
         addBenefitsSummary(players, benefits);
@@ -50,31 +59,42 @@ public class AdminHomeView extends VerticalLayout {
         addOfficialsSummary(officialsCard, officials);
         Div links = new Div(players, eventsCard, officialsCard);
         links.addClassName("home-links");
-        add(PlayerUi.pageHeader("Admin Home", "Run the tournament from here."), links,
-                remainingMatches(matches.remainingMatches()));
+        H2 heading = new H2("Remaining matches");
+        heading.addClassName("home-section-title");
+        remaining.addClassName("home-remaining");
+        Div section = new Div(heading, remaining);
+        section.addClassName("home-section");
+        add(PlayerUi.pageHeader("Admin Home", "Run the tournament from here."), links, section);
+        reloadRemaining();
+    }
+
+    @Override
+    protected void onAttach(AttachEvent attachEvent) {
+        unsubscribe = LiveReload.subscribe(attachEvent.getUI(), updates, eventId -> true, this::reloadRemaining);
+    }
+
+    @Override
+    protected void onDetach(DetachEvent detachEvent) {
+        if (unsubscribe != null) unsubscribe.run();
+        unsubscribe = null;
     }
 
     /**
      * One card per event with its matches still to be played, as ordered by the service:
      * those with a court or time first, earliest first, then the rest in round order.
      */
-    private static Component remainingMatches(List<Match> remaining) {
-        H2 heading = new H2("Remaining matches");
-        heading.addClassName("home-section-title");
-        Div cards = new Div();
-        cards.addClassName("home-remaining");
-        if (remaining.isEmpty()) {
-            cards.add(PlayerUi.muted("No matches to play. Lock an event's draw to create its matches."));
+    private void reloadRemaining() {
+        remaining.removeAll();
+        List<Match> list = matches.remainingMatches();
+        if (list.isEmpty()) {
+            remaining.add(PlayerUi.muted("No matches to play. Lock an event's draw to create its matches."));
         }
-        Map<String, List<Match>> byEvent = remaining.stream()
+        Map<String, List<Match>> byEvent = list.stream()
                 .collect(Collectors.groupingBy(Match::eventId, LinkedHashMap::new, Collectors.toList()));
-        byEvent.values().forEach(list -> cards.add(eventCard(list)));
-        Div section = new Div(heading, cards);
-        section.addClassName("home-section");
-        return section;
+        byEvent.values().forEach(event -> remaining.add(eventCard(event)));
     }
 
-    private static Card eventCard(List<Match> list) {
+    private Card eventCard(List<Match> list) {
         Match first = list.getFirst();
         long scheduled = list.stream().filter(Match::scheduled).count();
         Card card = card(first.eventName(), badge(list.size() + (list.size() == 1 ? " match" : " matches")));
@@ -84,13 +104,30 @@ public class AdminHomeView extends VerticalLayout {
             String detail = m.roundName() + " · Match " + m.matchNo()
                     + (m.official() == null ? "" : " · " + m.official());
             String where = PlayerUi.scheduleLabel(m);
-            rows.add(listRow(m.side1() + " vs " + m.side2(), new Span(detail),
-                    where == null ? badge("Not scheduled") : badge(where, BadgeVariant.SUCCESS)));
+            Div row = listRow(m.side1() + " vs " + m.side2(), new Span(detail),
+                    where == null ? badge("Not scheduled") : badge(where, BadgeVariant.SUCCESS));
+            makeOpenable(row, m);
+            rows.add(row);
         }
         card.add(rows);
         RouterLink open = new RouterLink("Open matches", AdminMatchesView.class, first.eventId());
         card.addToFooter(open);
         return card;
+    }
+
+    /** Clicking the row, or Enter on it, opens the result dialog for that match. */
+    private void makeOpenable(Div row, Match match) {
+        row.addClassName("clickable");
+        row.getElement().setAttribute("role", "button");
+        row.getElement().setAttribute("tabindex", "0");
+        row.getElement().setAttribute("aria-label", "Update result: " + match.side1() + " vs " + match.side2());
+        row.addClickListener(e -> openResult(match));
+        row.getElement().addEventListener("keydown", e -> openResult(match))
+                .setFilter("event.key === 'Enter'");
+    }
+
+    private void openResult(Match match) {
+        new MatchResultDialog(matches, updates, match, true, this::reloadRemaining).open();
     }
 
     /** The Players and Benefits page figures as mini meters, with the entry fee as a badge. */
