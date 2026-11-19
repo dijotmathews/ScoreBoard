@@ -4,9 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.dijo.events.DrawService;
 import com.dijo.events.EventService;
+import com.dijo.events.Match;
 import com.dijo.events.MatchService;
 import com.vaadin.flow.component.card.Card;
 import com.vaadin.flow.component.html.Div;
+import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
+import com.vaadin.flow.component.textfield.TextField;
 import java.time.LocalTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -77,6 +80,27 @@ class AdminHomeViewTest extends UiTest {
 
         assertThat(find(Card.class).all()).noneMatch(c -> c.getParent()
                 .filter(p -> p.hasClassName("home-remaining")).isPresent());
+        assertThat(find(com.vaadin.flow.component.html.Span.class)
+                .withText("No matches to play. Lock an event's draw to create its matches.").exists()).isTrue();
+    }
+
+    @Test
+    void clickingARemainingMatchUpdatesItsResult() {
+        String doubles = lockedDraw("Doubles", "ada", "bob");
+        navigate(AdminHomeView.class);
+
+        Div row = find(Div.class).all().stream().filter(d -> d.hasClassName("list-row")).findFirst().orElseThrow();
+        test(row).click();
+        test(find(RadioButtonGroup.class).single()).selectItem("bob");
+        test(find(TextField.class).withLabel("Score").single()).setValue("21-17");
+        click("Save & confirm");
+
+        Match fin = matches.currentMatch(doubles, 1, 1).orElseThrow();
+        assertThat(fin.winner()).isEqualTo("bob");
+        assertThat(fin.score()).isEqualTo("21-17");
+        assertThat(fin.confirmed()).isTrue();
+        assertThat(notifications()).contains("Result confirmed");
+        // The played match drops off the list.
         assertThat(find(com.vaadin.flow.component.html.Span.class)
                 .withText("No matches to play. Lock an event's draw to create its matches.").exists()).isTrue();
     }
