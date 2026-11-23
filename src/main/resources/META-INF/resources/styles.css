@@ -542,16 +542,16 @@ vaadin-grid::part(match-alt) {
     margin: 0;
 }
 
-.list-row.clickable {
-    cursor: pointer;
-    border-radius: var(--vaadin-radius-s, 4px);
+.list-row-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--vaadin-gap-s);
+    flex-shrink: 0;
 }
 
-.list-row.clickable:hover {
-    background: var(--vaadin-background-container, rgba(0, 0, 0, 0.04));
-}
-
-.list-row.clickable:focus-visible {
-    outline: 2px solid var(--vaadin-focus-ring-color, currentColor);
-    outline-offset: 2px;
+/* On narrow cards the actions drop below the players rather than squeezing them. */
+.home-remaining .list-row {
+    flex-wrap: wrap;
 }

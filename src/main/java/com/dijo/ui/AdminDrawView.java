@@ -213,10 +213,10 @@ public class AdminDrawView extends VerticalLayout implements HasUrlParameter<Str
                     clear, lock));
         }
 
-        stats.add(PlayerUi.statTile("Status", locked ? "Locked" : "Open",
+        stats.add(PlayerUi.statTile("Status", locked ? "Ready" : "Open",
                         locked ? "matches created"
-                                : filled == slots.size() && noPartner == 0 ? "ready to lock" : "being filled"),
-                PlayerUi.statTile("Slots filled", String.valueOf(filled), "of " + slots.size() + " slots"),
+                                : filled == slots.size() && noPartner == 0 ? "waiting to lock" : "being filled"),
+                PlayerUi.statTile("Draw places filled", String.valueOf(filled), "of " + slots.size() + " places"),
                 PlayerUi.statTile(event.doubles() ? "Teams placed" : "Players placed",
                         String.valueOf(filled - byes), event.doubles() && noPartner > 0
                                 ? noPartner + (noPartner == 1 ? " needs a partner" : " need a partner") : null),

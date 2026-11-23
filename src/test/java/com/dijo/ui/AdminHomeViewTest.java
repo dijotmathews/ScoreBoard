@@ -6,10 +6,13 @@ import com.dijo.events.DrawService;
 import com.dijo.events.EventService;
 import com.dijo.events.Match;
 import com.dijo.events.MatchService;
+import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.card.Card;
+import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
 import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.component.timepicker.TimePicker;
 import java.time.LocalTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,11 +66,14 @@ class AdminHomeViewTest extends UiTest {
                 .filter(c -> c.getParent().filter(p -> p.hasClassName("home-remaining")).isPresent())
                 .toList();
         assertThat(cards).hasSize(2);
-        assertThat(rows(cards.get(0))).containsExactly("ada vs bobFinal · Match 1Not scheduled");
+        assertThat(rows(cards.get(0))).containsExactly("ada vs bobFinal · Match 1Not scheduledScheduleResult");
         assertThat(rows(cards.get(1))).containsExactly(
-                "cy vs deeSemi-final · Match 2Court 2 · 10:30 AM",
-                "ada vs bobSemi-final · Match 1Not scheduled",
-                "TBD vs TBDFinal · Match 1Not scheduled");
+                "cy vs deeSemi-final · Match 2Court 2 · 10:30 AMScheduleResult",
+                "ada vs bobSemi-final · Match 1Not scheduledScheduleResult",
+                "TBD vs TBDFinal · Match 1Not scheduledScheduleResult");
+        // The final's players are not known yet, so its result cannot be entered.
+        assertThat(find(Button.class).withText("Result").all().stream().map(Button::isEnabled))
+                .containsExactly(true, true, true, false);
     }
 
     @Test
@@ -85,12 +91,11 @@ class AdminHomeViewTest extends UiTest {
     }
 
     @Test
-    void clickingARemainingMatchUpdatesItsResult() {
+    void resultButtonEntersAndConfirmsTheResult() {
         String doubles = lockedDraw("Doubles", "ada", "bob");
         navigate(AdminHomeView.class);
 
-        Div row = find(Div.class).all().stream().filter(d -> d.hasClassName("list-row")).findFirst().orElseThrow();
-        test(row).click();
+        click("Result");
         test(find(RadioButtonGroup.class).single()).selectItem("bob");
         test(find(TextField.class).withLabel("Score").single()).setValue("21-17");
         click("Save & confirm");
@@ -103,5 +108,37 @@ class AdminHomeViewTest extends UiTest {
         // The played match drops off the list.
         assertThat(find(com.vaadin.flow.component.html.Span.class)
                 .withText("No matches to play. Lock an event's draw to create its matches.").exists()).isTrue();
+    }
+
+    @Test
+    void scheduleButtonSetsCourtTimeAndOfficial() {
+        data.account("olly", "OFFICIAL");
+        String doubles = lockedDraw("Doubles", "ada", "bob");
+        navigate(AdminHomeView.class);
+
+        click("Schedule");
+        test(find(TextField.class).withLabel("Court").single()).setValue("3");
+        test(find(TimePicker.class).withLabel("Time").single()).setValue(LocalTime.of(11, 15));
+        test(find(ComboBox.class).withLabel("Official").single()).selectItem("olly");
+        click("Save");
+
+        Match fin = matches.currentMatch(doubles, 1, 1).orElseThrow();
+        assertThat(fin.court()).isEqualTo("3");
+        assertThat(fin.startTime()).isEqualTo(LocalTime.of(11, 15));
+        assertThat(fin.official()).isEqualTo("olly");
+        assertThat(notifications()).contains("Match updated");
+        assertThat(find(Div.class).all().stream().filter(d -> d.hasClassName("list-row"))
+                .map(d -> d.getElement().getTextRecursively()))
+                .containsExactly("ada vs bobFinal · Match 1 · ollyCourt 3 · 11:15 AMScheduleResult");
+
+        // Clearing them all unschedules the match.
+        click("Schedule");
+        test(find(TextField.class).withLabel("Court").single()).setValue("");
+        test(find(TimePicker.class).withLabel("Time").single()).setValue(null);
+        test(find(ComboBox.class).withLabel("Official").single()).clickClearButton();
+        click("Save");
+        fin = matches.currentMatch(doubles, 1, 1).orElseThrow();
+        assertThat(fin.scheduled()).isFalse();
+        assertThat(fin.official()).isNull();
     }
 }

@@ -93,9 +93,9 @@ public class AdminEventsView extends VerticalLayout {
     }
 
     private Badge status(EventSummary s) {
-        if (s.event().drawLocked()) return badge("Locked", BadgeVariant.SUCCESS);
+        if (s.event().drawLocked()) return badge("Ready", BadgeVariant.SUCCESS);
         if (s.filled() == 0) return badge("Empty");
-        if (s.filled() == s.event().contestantCount()) return badge("Ready to lock", BadgeVariant.WARNING);
+        if (s.filled() == s.event().contestantCount()) return badge("Waiting to lock", BadgeVariant.WARNING);
         return badge("Filling");
     }
 
@@ -137,9 +137,9 @@ public class AdminEventsView extends VerticalLayout {
         int filled = events.stream().mapToInt(EventSummary::filled).sum();
         stats.removeAll();
         stats.add(PlayerUi.statTile("Events", String.valueOf(events.size()), null),
-                PlayerUi.statTile("Draws locked", String.valueOf(locked), "of " + events.size() + " events"),
-                PlayerUi.statTile("Slots filled", String.valueOf(filled), "of " + slots + " slots"),
-                PlayerUi.statTile("Ready to lock", String.valueOf(ready), "full draws not locked"));
+                PlayerUi.statTile("Draws ready", String.valueOf(locked), "of " + events.size() + " events"),
+                PlayerUi.statTile("Draw places filled", String.valueOf(filled), "of " + slots + " places"),
+                PlayerUi.statTile("Waiting to lock", String.valueOf(ready), "full draws not locked yet"));
         applyFilter();
     }
 

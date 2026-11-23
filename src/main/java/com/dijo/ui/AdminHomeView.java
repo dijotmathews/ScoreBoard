@@ -18,6 +18,8 @@ import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.badge.BadgeVariant;
+import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.card.Card;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H2;
@@ -52,7 +54,7 @@ public class AdminHomeView extends VerticalLayout {
                 "Player accounts, entry fee sign-ups, welcome kits and coupons.", AdminPlayersView.class);
         addBenefitsSummary(players, benefits);
         RouterLink eventsCard = link(VaadinIcon.TROPHY, "Manage events",
-                "Events, their draws and knockout matches.", AdminEventsView.class);
+                "Create events, make the draws and run the matches.", AdminEventsView.class);
         addEventsSummary(eventsCard, events, matches);
         RouterLink officialsCard = link(VaadinIcon.CLIPBOARD_USER, "Officials",
                 "Accounts for the people who score matches, and their workload.", AdminOfficialsView.class);
@@ -104,10 +106,8 @@ public class AdminHomeView extends VerticalLayout {
             String detail = m.roundName() + " · Match " + m.matchNo()
                     + (m.official() == null ? "" : " · " + m.official());
             String where = PlayerUi.scheduleLabel(m);
-            Div row = listRow(m.side1() + " vs " + m.side2(), new Span(detail),
-                    where == null ? badge("Not scheduled") : badge(where, BadgeVariant.SUCCESS));
-            makeOpenable(row, m);
-            rows.add(row);
+            rows.add(listRow(m.side1() + " vs " + m.side2(), new Span(detail), actions(m,
+                    where == null ? badge("Not scheduled") : badge(where, BadgeVariant.SUCCESS))));
         }
         card.add(rows);
         RouterLink open = new RouterLink("Open matches", AdminMatchesView.class, first.eventId());
@@ -115,19 +115,20 @@ public class AdminHomeView extends VerticalLayout {
         return card;
     }
 
-    /** Clicking the row, or Enter on it, opens the result dialog for that match. */
-    private void makeOpenable(Div row, Match match) {
-        row.addClassName("clickable");
-        row.getElement().setAttribute("role", "button");
-        row.getElement().setAttribute("tabindex", "0");
-        row.getElement().setAttribute("aria-label", "Update result: " + match.side1() + " vs " + match.side2());
-        row.addClickListener(e -> openResult(match));
-        row.getElement().addEventListener("keydown", e -> openResult(match))
-                .setFilter("event.key === 'Enter'");
-    }
-
-    private void openResult(Match match) {
-        new MatchResultDialog(matches, updates, match, true, this::reloadRemaining).open();
+    /** The row's schedule badge, then buttons to edit court, time and official, and the result. */
+    private Div actions(Match match, Component badge) {
+        Button schedule = new Button("Schedule", VaadinIcon.CALENDAR_CLOCK.create(),
+                e -> new MatchScheduleDialog(matches, match, this::reloadRemaining).open());
+        schedule.setAriaLabel("Court, time and official: " + match.side1() + " vs " + match.side2());
+        Button result = new Button("Result", VaadinIcon.TROPHY.create(),
+                e -> new MatchResultDialog(matches, updates, match, true, this::reloadRemaining).open());
+        result.setAriaLabel("Result: " + match.side1() + " vs " + match.side2());
+        result.setEnabled(match.ready());
+        if (!match.ready()) result.setTooltipText("The players for this match are not known yet");
+        for (Button b : List.of(schedule, result)) b.addThemeVariants(ButtonVariant.SMALL, ButtonVariant.TERTIARY);
+        Div actions = new Div(badge, schedule, result);
+        actions.addClassName("list-row-actions");
+        return actions;
     }
 
     /** The Players and Benefits page figures as mini meters, with the entry fee as a badge. */
@@ -153,9 +154,9 @@ public class AdminHomeView extends VerticalLayout {
         long filled = all.stream().mapToLong(EventSummary::filled).sum();
         MatchTotals totals = matches.totals();
         summarise(card, all.size() + (all.size() == 1 ? " event" : " events"),
-                meter("Draws locked", locked, all.size()),
-                meter("Slots filled", filled, slots),
-                meter("Matches confirmed", totals.confirmed(), totals.total(), "no matches yet"));
+                meter("Draws ready", locked, all.size()),
+                meter("Draw places filled", filled, slots),
+                meter("Match results confirmed", totals.confirmed(), totals.total(), "no matches yet"));
     }
 
     /** Officials figures: active accounts, open matches covered, assigned matches completed. */
