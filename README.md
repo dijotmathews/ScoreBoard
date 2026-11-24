@@ -6,7 +6,8 @@ Draws, matches and player benefits for a tournament: a Vaadin Flow and Spring Bo
 
 On **Players and Benefits**, **Import CSV** creates players in bulk from the registration
 form export (for example the Google Forms CSV). Each player gets a username made from their
-name, which is also their initial password. When a row has a transaction reference, the
+name, which is also their initial password. Names are saved with each word capitalized,
+however they were typed ("ABEL JOE MANOJ" becomes "Abel Joe Manoj"). When a row has a transaction reference, the
 payment is recorded and the player is signed up, for the amount in the row or, if that is
 blank, the entry fee set in Benefit settings. Rows already imported (same transaction
 reference or same name) are skipped, so the same file can be uploaded again safely.

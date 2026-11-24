@@ -588,10 +588,6 @@ vaadin-grid::part(match-alt) {
 }
 
 /* On narrow cards the actions drop below the players rather than squeezing them. */
-.home-remaining .list-row {
-    flex-wrap: wrap;
-}
-
 /* Player import: the expected file format */
 .csv-example {
     margin: var(--vaadin-gap-m) 0 var(--vaadin-gap-s);
@@ -606,4 +602,108 @@ vaadin-grid::part(match-alt) {
     display: inline-flex;
     align-items: center;
     gap: var(--vaadin-gap-xs);
+}
+
+/* Remaining matches on Admin Home: round, the two sides, then schedule and buttons */
+.list-row.match-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--vaadin-gap-xs);
+}
+
+.match-row-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vaadin-gap-s);
+    min-height: 1.5rem;
+}
+
+.match-row-round {
+    font-size: 0.8em;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--vaadin-text-color-secondary);
+}
+
+.match-row-sides {
+    display: flex;
+    flex-direction: column;
+}
+
+.match-side {
+    display: flex;
+    align-items: center;
+    gap: var(--vaadin-gap-xs);
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.match-side.winner {
+    font-weight: 600;
+}
+
+.match-side-icon {
+    width: 0.9em;
+    height: 0.9em;
+    flex: none;
+    color: var(--aura-orange-text);
+}
+
+.match-side-score {
+    margin-inline-start: auto;
+    padding-inline-start: var(--vaadin-gap-s);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.match-row-bottom {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vaadin-gap-xs) var(--vaadin-gap-m);
+}
+
+.match-row-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vaadin-gap-xs) var(--vaadin-gap-m);
+    font-size: 0.9em;
+    color: var(--vaadin-text-color-secondary);
+}
+
+.match-fact {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vaadin-gap-xs);
+}
+
+.match-fact vaadin-icon {
+    width: 0.9em;
+    height: 0.9em;
+}
+
+.match-fact.missing {
+    font-style: italic;
+    opacity: 0.8;
+}
+
+.match-row .list-row-actions {
+    margin-inline-start: auto;
+}
+
+/* A result entered (usually by the official) that waits for the admin */
+.list-row.match-row.to-confirm {
+    margin-inline: calc(-1 * var(--vaadin-padding-s));
+    padding: var(--vaadin-padding-s);
+    border-top-color: transparent;
+    border-left: 3px solid var(--aura-orange);
+    border-radius: var(--vaadin-radius-m);
+    background: color-mix(in srgb, var(--aura-orange) 8%, transparent);
+}
+
+.list-row.match-row.to-confirm + .list-row {
+    border-top-color: transparent;
 }

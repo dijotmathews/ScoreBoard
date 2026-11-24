@@ -191,7 +191,30 @@ public class PlayerAccountService {
             throw new IllegalArgumentException("Full name must be at most " + MAX_FULL_NAME_LENGTH
                     + " letters, spaces, apostrophes, '.' or '-'");
         }
-        return name;
+        return capitalizeName(name);
+    }
+
+    /**
+     * Each word with a capital first letter and the rest in lowercase, however it was
+     * typed: "ABEL JOE MANOJ" and "abel joe manoj" both become "Abel Joe Manoj". A letter
+     * after an apostrophe, '-' or '.' also starts a word ("O'Brien", "Mary-Ann", "A.K.").
+     */
+    public static String capitalizeName(String name) {
+        if (name == null) return null;
+        StringBuilder out = new StringBuilder(name.length());
+        boolean start = true;
+        for (int i = 0; i < name.length(); ) {
+            int c = name.codePointAt(i);
+            i += Character.charCount(c);
+            if (Character.isLetter(c)) {
+                out.appendCodePoint(start ? Character.toTitleCase(c) : Character.toLowerCase(c));
+                start = false;
+            } else {
+                out.appendCodePoint(c);
+                start = !Character.isDigit(c);
+            }
+        }
+        return out.toString();
     }
 
     /**

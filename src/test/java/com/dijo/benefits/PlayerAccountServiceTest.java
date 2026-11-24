@@ -42,6 +42,27 @@ class PlayerAccountServiceTest extends DatabaseTest {
         assertThat(row.name()).isEqualTo("Dijo T Mathews");
     }
 
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "ABEL JOE MANOJ | Abel Joe Manoj",
+            "abhiram a pillai | Abhiram A Pillai",
+            "aNN mARIA sAJI | Ann Maria Saji",
+            "o'brien mary-ann | O'Brien Mary-Ann",
+            "a.k. menon | A.K. Menon",
+            "élodie | Élodie"})
+    void capitalizesEachWordOfTheName(String typed, String stored) {
+        assertThat(PlayerAccountService.capitalizeName(typed)).isEqualTo(stored);
+    }
+
+    @Test
+    void storesNamesCapitalizedWhenCreatedOrEdited() {
+        String username = accounts.createPlayer("ABEL JOE MANOJ", true);
+        assertThat(benefits.listPlayerBenefits().getFirst().fullName()).isEqualTo("Abel Joe Manoj");
+
+        accounts.updatePlayer(username, "abel joe manoj k", null, true, null);
+        assertThat(benefits.listPlayerBenefits().getFirst().fullName()).isEqualTo("Abel Joe Manoj K");
+    }
+
     @Test
     void theInitialPasswordIsTheUsername() {
         accounts.createPlayer("Ada Li", true);

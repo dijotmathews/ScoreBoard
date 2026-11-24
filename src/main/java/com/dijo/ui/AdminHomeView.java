@@ -2,7 +2,6 @@ package com.dijo.ui;
 
 import static com.dijo.ui.PlayerUi.badge;
 import static com.dijo.ui.PlayerUi.card;
-import static com.dijo.ui.PlayerUi.listRow;
 
 import com.dijo.benefits.PlayerBenefitsService;
 import com.dijo.benefits.PlayerBenefitsService.PlayerBenefitRow;
@@ -34,6 +33,8 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouterLink;
 import jakarta.annotation.security.RolesAllowed;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -139,37 +140,106 @@ public class AdminHomeView extends VerticalLayout {
         return terms.stream().allMatch(text::contains);
     }
 
+    /**
+     * One event's remaining matches. Results entered but not yet confirmed come first,
+     * flagged so the admin sees what to confirm.
+     */
     private Card eventCard(List<Match> list) {
         Match first = list.getFirst();
-        long scheduled = list.stream().filter(Match::scheduled).count();
+        List<Match> sorted = list.stream().sorted(Comparator.comparing(m -> !toConfirm(m))).toList();
+        long toConfirm = list.stream().filter(AdminHomeView::toConfirm).count();
+        long unscheduled = list.stream().filter(m -> !m.scheduled()).count();
         Card card = card(first.eventName(), badge(list.size() + (list.size() == 1 ? " match" : " matches")));
-        card.setSubtitle(scheduled + " with a court or time");
+        List<String> notes = new ArrayList<>();
+        if (toConfirm > 0) notes.add(toConfirm + (toConfirm == 1 ? " result" : " results") + " to confirm");
+        if (unscheduled > 0) notes.add(unscheduled + " without a court or time");
+        card.setSubtitle(notes.isEmpty() ? "All have a court or time" : String.join(" · ", notes));
         Div rows = PlayerUi.list();
-        for (Match m : list) {
-            String detail = m.roundName() + " · Match " + m.matchNo()
-                    + (m.official() == null ? "" : " · " + m.official());
-            String where = PlayerUi.scheduleLabel(m);
-            rows.add(listRow(m.side1() + " vs " + m.side2(), new Span(detail), actions(m,
-                    where == null ? badge("Not scheduled") : badge(where, BadgeVariant.SUCCESS))));
-        }
+        sorted.forEach(m -> rows.add(matchRow(m)));
         card.add(rows);
         RouterLink open = new RouterLink("Open matches", AdminMatchesView.class, first.eventId());
         card.addToFooter(open);
         return card;
     }
 
-    /** The row's schedule badge, then buttons to edit court, time and official, and the result. */
-    private Div actions(Match match, Component badge) {
+    /**
+     * A match as three parts: the round (and a flag when its result waits for
+     * confirmation), the two sides one per line with the winner and score marked,
+     * then where, when and who officiates beside the buttons.
+     */
+    private Div matchRow(Match m) {
+        boolean review = toConfirm(m);
+        Span round = new Span(m.roundName() + " · Match " + m.matchNo());
+        round.addClassName("match-row-round");
+        Div top = new Div(round);
+        top.addClassName("match-row-top");
+        if (review) top.add(badge("Result to confirm", BadgeVariant.WARNING));
+
+        Div sides = new Div(side(m, m.player1(), m.side1()), side(m, m.player2(), m.side2()));
+        sides.addClassName("match-row-sides");
+
+        String where = PlayerUi.scheduleLabel(m);
+        Div meta = new Div(fact(VaadinIcon.CLOCK, where == null ? "No court or time" : where, where == null),
+                fact(VaadinIcon.USER, m.official() == null ? "No official" : m.official(), m.official() == null));
+        if (review && m.resultBy() != null) meta.add(fact(VaadinIcon.EDIT, "Entered by " + m.resultBy(), false));
+        meta.addClassName("match-row-meta");
+        Div bottom = new Div(meta, actions(m));
+        bottom.addClassName("match-row-bottom");
+
+        Div row = new Div(top, sides, bottom);
+        row.addClassName("list-row");
+        row.addClassName("match-row");
+        if (review) row.addClassName("to-confirm");
+        return row;
+    }
+
+    /** One side's name; the entered winner is bold, with a trophy and the score. */
+    private static Div side(Match m, String player, String name) {
+        Div side = new Div(new Span(name));
+        side.addClassName("match-side");
+        if (m.winner() != null && m.winner().equals(player)) {
+            side.addClassName("winner");
+            Icon trophy = VaadinIcon.TROPHY.create();
+            trophy.addClassName("match-side-icon");
+            side.addComponentAsFirst(trophy);
+            if (m.score() != null && !m.score().isBlank()) {
+                Span score = new Span(m.score());
+                score.addClassName("match-side-score");
+                side.add(score);
+            }
+        }
+        return side;
+    }
+
+    /** An icon and a short fact; a missing one is shown dimmed. */
+    private static Span fact(VaadinIcon icon, String text, boolean missing) {
+        Span fact = new Span(icon.create(), new Span(text));
+        fact.addClassName("match-fact");
+        if (missing) fact.addClassName("missing");
+        return fact;
+    }
+
+    /** A result has been entered (usually by the official) and waits for the admin. */
+    private static boolean toConfirm(Match m) {
+        return m.status() == Match.Status.AWAITING_CONFIRMATION;
+    }
+
+    /** Buttons to edit court, time and official, and the result. */
+    private Div actions(Match match) {
         Button schedule = new Button("Schedule", VaadinIcon.CALENDAR_CLOCK.create(),
                 e -> new MatchScheduleDialog(matches, match, this::reloadRemaining).open());
         schedule.setAriaLabel("Court, time and official: " + match.side1() + " vs " + match.side2());
-        Button result = new Button("Result", VaadinIcon.TROPHY.create(),
+        boolean review = toConfirm(match);
+        Button result = new Button(review ? "Review & confirm" : "Result",
+                (review ? VaadinIcon.CHECK : VaadinIcon.TROPHY).create(),
                 e -> new MatchResultDialog(matches, updates, match, true, this::reloadRemaining).open());
-        result.setAriaLabel("Result: " + match.side1() + " vs " + match.side2());
+        result.setAriaLabel((review ? "Review and confirm the result: " : "Result: ")
+                + match.side1() + " vs " + match.side2());
         result.setEnabled(match.ready());
         if (!match.ready()) result.setTooltipText("The players for this match are not known yet");
-        for (Button b : List.of(schedule, result)) b.addThemeVariants(ButtonVariant.SMALL, ButtonVariant.TERTIARY);
-        Div actions = new Div(badge, schedule, result);
+        schedule.addThemeVariants(ButtonVariant.SMALL, ButtonVariant.TERTIARY);
+        result.addThemeVariants(ButtonVariant.SMALL, review ? ButtonVariant.PRIMARY : ButtonVariant.TERTIARY);
+        Div actions = new Div(schedule, result);
         actions.addClassName("list-row-actions");
         return actions;
     }
