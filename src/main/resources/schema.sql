@@ -5,7 +5,9 @@ CREATE TABLE IF NOT EXISTS users (
     enabled INTEGER NOT NULL DEFAULT 1
     CHECK (enabled IN (0, 1)),
     -- How the player is shown, e.g. "Dijo T Mathews"; NULL shows the username.
-    full_name TEXT
+    full_name TEXT,
+    -- Optional contact number, as entered, e.g. "+91 98765 43210".
+    phone TEXT
 );
 
 CREATE TABLE IF NOT EXISTS authorities (

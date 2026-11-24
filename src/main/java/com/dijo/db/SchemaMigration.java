@@ -37,6 +37,7 @@ public class SchemaMigration implements InitializingBean {
     public void afterPropertiesSet() throws SQLException {
         if (tableExists(jdbc, "benefit_events")) migrateFromEventBenefits();
         addColumnIfMissing("users", "full_name", "TEXT");
+        addColumnIfMissing("users", "phone", "TEXT");
         addColumnIfMissing("matches", "court", "TEXT");
         addColumnIfMissing("matches", "start_time", "TEXT");
         addColumnIfMissing("events", "draw_locked",

@@ -205,9 +205,9 @@ public class PlayerBenefitsService {
         return ids.getFirst();
     }
 
-    /** fullName is null when the player has none. */
-    public record PlayerBenefitRow(String username, String fullName, boolean enabled, String paymentId,
-            String paymentReference, long amountPaise, String kitHandedOverAt,
+    /** fullName and phone are null when the player has none. */
+    public record PlayerBenefitRow(String username, String fullName, String phone, boolean enabled,
+            String paymentId, String paymentReference, long amountPaise, String kitHandedOverAt,
             int couponsIssued, int couponsRedeemed) {
         /** How the player is shown: their full name, else their username. */
         public String name() { return fullName == null ? username : fullName; }
@@ -220,7 +220,7 @@ public class PlayerBenefitsService {
     @PreAuthorize("hasRole('ADMIN')")
     public List<PlayerBenefitRow> listPlayerBenefits() {
         return jdbc.query("""
-                SELECT u.username, u.full_name, u.enabled, p.id AS payment_id,
+                SELECT u.username, u.full_name, u.phone, u.enabled, p.id AS payment_id,
                        p.payment_reference, COALESCE(p.amount_paise, 0) AS amount_paise,
                        k.handed_over_at,
                        COALESCE(c.issued, 0) AS coupons_issued,
@@ -239,7 +239,8 @@ public class PlayerBenefitsService {
                                 AND staff.authority IN ('ROLE_ADMIN', 'ROLE_OFFICIAL'))
                 ORDER BY COALESCE(u.full_name, u.username) COLLATE NOCASE, u.username
                 """, (rs, row) -> new PlayerBenefitRow(rs.getString("username"),
-                rs.getString("full_name"), rs.getBoolean("enabled"), rs.getString("payment_id"),
+                rs.getString("full_name"), rs.getString("phone"), rs.getBoolean("enabled"),
+                rs.getString("payment_id"),
                 rs.getString("payment_reference"), rs.getLong("amount_paise"),
                 rs.getString("handed_over_at"), rs.getInt("coupons_issued"),
                 rs.getInt("coupons_redeemed")));

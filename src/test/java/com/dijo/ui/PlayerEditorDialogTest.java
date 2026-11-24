@@ -133,6 +133,41 @@ class PlayerEditorDialogTest extends UiTest {
     }
 
     @Test
+    void contactNumberIsSavedShownAndSearchable() {
+        navigate(AdminPlayersView.class);
+        click("New player");
+        type("Full name", "Bo Chen");
+        type("Contact number", "+91 98765 43210");
+        click("Create");
+        assertThat(phoneOf("bochen")).isEqualTo("+91 98765 43210");
+
+        // Found by its digits, however they are spaced.
+        search("9876543210");
+        assertThat(test(find(Grid.class).single()).size()).isEqualTo(1);
+        assertThat(test(find(Grid.class).single()).getCellText(0, 1)).isEqualTo("+91 98765 43210");
+        search("");
+
+        // Optional: Ada has none, and it can be added, then cleared, from her dialog.
+        openAda();
+        assertThat(find(TextField.class).withLabel("Contact number").single().getValue()).isEmpty();
+        type("Contact number", "abc");
+        click("Save");
+        assertThat(notifications()).anyMatch(n -> n.startsWith("Contact number must have"));
+        type("Contact number", "0484 255 1234");
+        click("Save");
+        assertThat(phoneOf("ada")).isEqualTo("0484 255 1234");
+    }
+
+    private void search(String term) {
+        test(find(TextField.class).all().stream().filter(t -> "Search players".equals(t.getPlaceholder()))
+                .findFirst().orElseThrow()).setValue(term);
+    }
+
+    private String phoneOf(String username) {
+        return jdbc.queryForObject("SELECT phone FROM users WHERE username = ?", String.class, username);
+    }
+
+    @Test
     void savingBenefitSettings() {
         navigate(AdminPlayersView.class);
         click("Benefit settings");

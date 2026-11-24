@@ -8,16 +8,28 @@ import java.util.function.Predicate;
 
 /**
  * Reads the registration form export (e.g. a Google Forms CSV) for a bulk player import.
- * Only the player's name, payment amount and transaction reference are used; other
- * columns (timestamp, email, date of birth, birth certificate, events) are ignored.
+ * Only the player's name, payment amount, transaction reference and, when the form has
+ * one, contact number are used; other columns (timestamp, email, date of birth, birth
+ * certificate, events) are ignored.
  * Columns are found by their header, so their order does not matter. Comma- and
  * tab-separated files are both accepted.
  */
 public final class PlayerCsv {
-    /** One data row. amountPaise and reference are null when blank; problem is null when valid. */
-    public record Row(int line, String name, Long amountPaise, String reference, String problem) {
+    /**
+     * One data row. amountPaise, reference and phone are null when blank (phone also when the
+     * file has no such column); problem is null when valid. The phone is checked on import.
+     */
+    public record Row(int line, String name, Long amountPaise, String reference, String phone,
+            String problem) {
         public boolean valid() { return problem == null; }
     }
+
+    /** A minimal file in the expected format, offered as a download on the import dialog. */
+    public static final String SAMPLE = """
+            Players Name(AITA/AADHAR),Contact Number,Payment Amount,Transaction Reference
+            Ada Li,+91 98765 43210,500,UPI123456789
+            Bo Chen,,,
+            """;
 
     private PlayerCsv() {}
 
@@ -34,24 +46,29 @@ public final class PlayerCsv {
         int amount = column(header, h -> h.contains("amount"), "Payment Amount");
         int reference = column(header, h -> h.contains("transaction") || h.contains("reference"),
                 "Transaction Reference");
+        int phone = optionalColumn(header, h -> h.contains("phone") || h.contains("mobile")
+                || h.contains("whatsapp"));
+        if (phone < 0) phone = optionalColumn(header, h -> h.contains("contact"));
 
         List<Row> rows = new ArrayList<>();
         for (int i = 1; i < records.size(); i++) {
             List<String> r = records.get(i);
             if (r.stream().allMatch(String::isBlank)) continue;
-            rows.add(row(i + 1, cell(r, name), cell(r, amount), cell(r, reference)));
+            String number = phone < 0 ? "" : cell(r, phone);
+            rows.add(row(i + 1, cell(r, name), cell(r, amount), cell(r, reference),
+                    number.isEmpty() ? null : number));
         }
         return rows;
     }
 
-    private static Row row(int line, String name, String amount, String reference) {
+    private static Row row(int line, String name, String amount, String reference, String phone) {
         String ref = reference.isEmpty() ? null : reference;
-        if (name.isEmpty()) return new Row(line, name, null, ref, "Player name is missing");
-        if (amount.isEmpty()) return new Row(line, name, null, ref, null);
+        if (name.isEmpty()) return new Row(line, name, null, ref, phone, "Player name is missing");
+        if (amount.isEmpty()) return new Row(line, name, null, ref, phone, null);
         try {
-            return new Row(line, name, paise(amount), ref, null);
+            return new Row(line, name, paise(amount), ref, phone, null);
         } catch (IllegalArgumentException e) {
-            return new Row(line, name, null, ref, "Payment amount \"" + amount + "\" is not a number");
+            return new Row(line, name, null, ref, phone, "Payment amount \"" + amount + "\" is not a number");
         }
     }
 
@@ -70,6 +87,14 @@ public final class PlayerCsv {
             if (matches.test(header.get(i))) return i;
         }
         throw new IllegalArgumentException("The file has no \"" + label + "\" column");
+    }
+
+    /** The first matching column, or -1 when there is none. */
+    private static int optionalColumn(List<String> header, Predicate<String> matches) {
+        for (int i = 0; i < header.size(); i++) {
+            if (matches.test(header.get(i))) return i;
+        }
+        return -1;
     }
 
     private static String cell(List<String> record, int index) {

@@ -44,6 +44,7 @@ class PlayerEditorDialog extends Dialog {
 
     private final TextField username = new TextField("Username");
     private final TextField fullName = new TextField("Full name");
+    private final TextField phone = new TextField("Contact number");
     private final PasswordField password = new PasswordField();
     private final Checkbox enabled = new Checkbox("Account enabled", true);
     private final VerticalLayout benefitsPanel = new VerticalLayout();
@@ -61,6 +62,8 @@ class PlayerEditorDialog extends Dialog {
         setWidth("min(640px, 100vw)");
 
         fullName.setPlaceholder("e.g. Dijo T Mathews");
+        phone.setPlaceholder("e.g. +91 98765 43210");
+        phone.setHelperText("Optional");
         username.setReadOnly(true);
         FormLayout form = new FormLayout();
         if (creating) {
@@ -70,15 +73,16 @@ class PlayerEditorDialog extends Dialog {
             fullName.setValueChangeMode(ValueChangeMode.EAGER);
             fullName.addValueChangeListener(e -> username.setValue(previewUsername(e.getValue())));
             username.setHelperText("Also the initial password; a number is added if it is taken");
-            form.add(fullName, username, enabled);
+            form.add(fullName, username, phone, enabled);
         } else {
             fullName.setHelperText("Shown in draws and matches; the username if left blank");
             fullName.setValue(player.fullName() == null ? "" : player.fullName());
             username.setValue(player.username());
+            phone.setValue(player.phone() == null ? "" : player.phone());
             password.setLabel("New password");
             password.setHelperText("Leave blank to keep the current password");
             enabled.setValue(player.enabled());
-            form.add(fullName, username, password, enabled);
+            form.add(fullName, username, phone, password, enabled);
         }
         form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1),
                 new FormLayout.ResponsiveStep("400px", 2));
@@ -110,10 +114,10 @@ class PlayerEditorDialog extends Dialog {
         String[] created = new String[1];
         boolean ok = run(() -> {
             if (player == null) {
-                created[0] = accounts.createPlayer(fullName.getValue(), enabled.getValue());
+                created[0] = accounts.createPlayer(fullName.getValue(), phone.getValue(), enabled.getValue());
             } else {
-                accounts.updatePlayer(player.username(), fullName.getValue(), enabled.getValue(),
-                        password.getValue());
+                accounts.updatePlayer(player.username(), fullName.getValue(), phone.getValue(),
+                        enabled.getValue(), password.getValue());
             }
         });
         if (ok) {

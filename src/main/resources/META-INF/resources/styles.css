@@ -555,3 +555,19 @@ vaadin-grid::part(match-alt) {
 .home-remaining .list-row {
     flex-wrap: wrap;
 }
+
+/* Player import: the expected file format */
+.csv-example {
+    margin: var(--vaadin-gap-m) 0 var(--vaadin-gap-s);
+    padding: var(--vaadin-padding-s) var(--vaadin-padding-m);
+    border-radius: var(--vaadin-radius-m);
+    background: var(--vaadin-background-container);
+    font-size: 0.85em;
+    overflow-x: auto;
+}
+
+.csv-sample-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vaadin-gap-xs);
+}
