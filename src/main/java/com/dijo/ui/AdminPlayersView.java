@@ -98,6 +98,7 @@ public class AdminPlayersView extends VerticalLayout {
 
         grid.addComponentColumn(this::playerCell).setHeader("Player").setFrozen(true)
                 .setComparator(r -> r.name().toLowerCase(Locale.ROOT)).setSortable(true).setFlexGrow(2);
+        grid.addColumn(r -> r.phone() == null ? "—" : r.phone()).setHeader("Contact number");
         grid.addComponentColumn(r -> r.paid() ? badge("Signed up", BadgeVariant.SUCCESS)
                 : badge("Not signed up", BadgeVariant.WARNING)).setHeader("Sign-up");
         grid.addColumn(r -> r.paid() ? PlayerEditorDialog.rupees(r.amountPaise()) : "—")
@@ -161,10 +162,16 @@ public class AdminPlayersView extends VerticalLayout {
         Show filter = show.getValue() == null ? Show.ALL : show.getValue();
         List<PlayerBenefitRow> visible = rows.stream()
                 .filter(r -> r.username().toLowerCase(Locale.ROOT).contains(term)
-                        || r.name().toLowerCase(Locale.ROOT).contains(term))
+                        || r.name().toLowerCase(Locale.ROOT).contains(term)
+                        || r.phone() != null && digits(r.phone()).contains(digits(term)) && !digits(term).isEmpty())
                 .filter(filter.test).toList();
         grid.setItems(visible);
         showing.setText(visible.size() == rows.size() ? rows.size() + " players"
                 : "Showing " + visible.size() + " of " + rows.size() + " players");
+    }
+
+    /** Numbers are matched on their digits, so "98765 43210" finds "9876543210". */
+    private static String digits(String text) {
+        return text.replaceAll("[^0-9]", "");
     }
 }

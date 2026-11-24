@@ -42,6 +42,27 @@ class PlayerAccountServiceTest extends DatabaseTest {
         assertThat(row.name()).isEqualTo("Dijo T Mathews");
     }
 
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "ABEL JOE MANOJ | Abel Joe Manoj",
+            "abhiram a pillai | Abhiram A Pillai",
+            "aNN mARIA sAJI | Ann Maria Saji",
+            "o'brien mary-ann | O'Brien Mary-Ann",
+            "a.k. menon | A.K. Menon",
+            "élodie | Élodie"})
+    void capitalizesEachWordOfTheName(String typed, String stored) {
+        assertThat(PlayerAccountService.capitalizeName(typed)).isEqualTo(stored);
+    }
+
+    @Test
+    void storesNamesCapitalizedWhenCreatedOrEdited() {
+        String username = accounts.createPlayer("ABEL JOE MANOJ", true);
+        assertThat(benefits.listPlayerBenefits().getFirst().fullName()).isEqualTo("Abel Joe Manoj");
+
+        accounts.updatePlayer(username, "abel joe manoj k", null, true, null);
+        assertThat(benefits.listPlayerBenefits().getFirst().fullName()).isEqualTo("Abel Joe Manoj K");
+    }
+
     @Test
     void theInitialPasswordIsTheUsername() {
         accounts.createPlayer("Ada Li", true);
@@ -95,13 +116,58 @@ class PlayerAccountServiceTest extends DatabaseTest {
     void updateChangesAndClearsTheFullName() {
         accounts.createPlayer("Ada", true);
 
-        accounts.updatePlayer("ada", "Ada O'Neil-Lovelace", true, null);
+        accounts.updatePlayer("ada", "Ada O'Neil-Lovelace", null, true, null);
         assertThat(benefits.listPlayerBenefits().getFirst().fullName()).isEqualTo("Ada O'Neil-Lovelace");
 
-        accounts.updatePlayer("ada", "", true, null);
+        accounts.updatePlayer("ada", "", null, true, null);
         var row = benefits.listPlayerBenefits().getFirst();
         assertThat(row.fullName()).isNull();
         assertThat(row.name()).isEqualTo("ada");
+    }
+
+    @Test
+    void contactNumberIsOptionalAndCanBeChangedOrCleared() {
+        accounts.createPlayer("Ada", true);
+        assertThat(benefits.listPlayerBenefits().getFirst().phone()).isNull();
+
+        accounts.createPlayer("Bo Chen", "  +91 98765   43210 ", true);
+        assertThat(benefits.listPlayerBenefits().getLast().phone()).isEqualTo("+91 98765 43210");
+
+        accounts.updatePlayer("ada", "Ada", "(0484) 255-1234", true, null);
+        assertThat(benefits.listPlayerBenefits().getFirst().phone()).isEqualTo("(0484) 255-1234");
+
+        accounts.updatePlayer("ada", "Ada", " ", true, null);
+        assertThat(benefits.listPlayerBenefits().getFirst().phone()).isNull();
+    }
+
+    @Test
+    void playersSetOnlyTheirOwnContactNumber() {
+        accounts.createPlayer("Ada", "98765 43210", true);
+        accounts.createPlayer("Bo Chen", true);
+        signIn("bochen", "USER");
+
+        assertThat(accounts.myPhone()).isNull();
+        assertThat(accounts.updateMyPhone(" +91  90000 11111 ")).isEqualTo("+91 90000 11111");
+        assertThat(accounts.myPhone()).isEqualTo("+91 90000 11111");
+        assertThatThrownBy(() -> accounts.updateMyPhone("123")).hasMessageStartingWith("Contact number must have");
+        assertThat(accounts.updateMyPhone("")).isNull();
+        assertThat(accounts.myPhone()).isNull();
+
+        // Ada's number is untouched, and players cannot use the admin methods.
+        assertThat(jdbc.queryForObject("SELECT phone FROM users WHERE username = 'ada'", String.class))
+                .isEqualTo("98765 43210");
+        assertThatThrownBy(() -> accounts.updatePlayer("ada", "Ada", "1234567", true, null))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+    }
+
+    @Test
+    void rejectsContactNumbersThatAreNotPhoneNumbers() {
+        String message = "Contact number must have 7-15 digits, optionally with a leading '+', spaces, '-' or brackets";
+        assertThatThrownBy(() -> accounts.createPlayer("Ada", "12345", true)).hasMessage(message);
+        assertThatThrownBy(() -> accounts.createPlayer("Ada", "98765 4321O", true)).hasMessage(message);
+        assertThatThrownBy(() -> accounts.createPlayer("Ada", "9".repeat(16), true)).hasMessage(message);
+        assertThatThrownBy(() -> accounts.createPlayer("Ada", "98+7654321", true)).hasMessage(message);
+        assertThat(count("SELECT count(*) FROM users WHERE username = 'ada'")).isZero();
     }
 
     @Test
@@ -116,7 +182,7 @@ class PlayerAccountServiceTest extends DatabaseTest {
     @Test
     void rejectsShortNewPasswords() {
         accounts.createPlayer("Ada", true);
-        assertThatThrownBy(() -> accounts.updatePlayer("ada", null, true, "short"))
+        assertThatThrownBy(() -> accounts.updatePlayer("ada", null, null, true, "short"))
                 .hasMessage("Password must be at least 8 characters");
     }
 
@@ -125,7 +191,7 @@ class PlayerAccountServiceTest extends DatabaseTest {
         accounts.createPlayer("Ada", true);
         String before = passwordOf("ada");
 
-        accounts.updatePlayer("ada", null, false, "  ");
+        accounts.updatePlayer("ada", null, null, false, "  ");
 
         assertThat(passwordOf("ada")).isEqualTo(before);
         assertThat(count("SELECT count(*) FROM users WHERE username = 'ada' AND enabled = 0")).isEqualTo(1);
@@ -134,14 +200,14 @@ class PlayerAccountServiceTest extends DatabaseTest {
     @Test
     void updateChangesThePassword() {
         accounts.createPlayer("Ada", true);
-        accounts.updatePlayer("ada", null, true, "Another@123");
+        accounts.updatePlayer("ada", null, null, true, "Another@123");
         assertThat(encoder.matches("Another@123", passwordOf("ada"))).isTrue();
     }
 
     @Test
     void staffAccountsAreNotPlayers() {
-        assertThatThrownBy(() -> accounts.updatePlayer("ref", null, false, null)).hasMessage("Player not found");
-        assertThatThrownBy(() -> accounts.updatePlayer("admin", null, false, null)).hasMessage("Player not found");
+        assertThatThrownBy(() -> accounts.updatePlayer("ref", null, null, false, null)).hasMessage("Player not found");
+        assertThatThrownBy(() -> accounts.updatePlayer("admin", null, null, false, null)).hasMessage("Player not found");
         assertThatThrownBy(() -> accounts.deletePlayer("ref")).hasMessage("Player not found");
     }
 

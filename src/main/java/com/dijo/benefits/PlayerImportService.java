@@ -10,7 +10,8 @@ import org.springframework.stereotype.Service;
 /**
  * Bulk player import from the registration form CSV. Each row is imported on its own,
  * so one bad row does not stop the rest. A row creates the player and, when it has a
- * transaction reference and an amount, records their entry fee payment (signing them up).
+ * transaction reference, records their entry fee payment, signing them up. The amount
+ * is the row's, or the entry fee when the row has none.
  * Rows already imported, by transaction reference or by player name, are skipped, so
  * uploading the same file again is safe.
  */
@@ -48,29 +49,51 @@ public class PlayerImportService {
             return new Result(row, Outcome.SKIPPED, null, "A player with this name already exists");
         }
 
+        // A mistyped number should not stop the player being imported; it is left out instead.
+        String phone = null;
+        String phoneNote = null;
+        try {
+            phone = PlayerAccountService.normalizePhone(row.phone());
+        } catch (IllegalArgumentException e) {
+            phoneNote = "Contact number \"" + row.phone() + "\" not saved: " + e.getMessage();
+        }
+
         String username;
         try {
-            username = accounts.createPlayer(row.name(), true);
+            username = accounts.createPlayer(row.name(), phone, true);
         } catch (IllegalArgumentException e) {
             return new Result(row, Outcome.FAILED, null, e.getMessage());
         }
 
-        if (row.reference() == null || row.amountPaise() == null) {
-            return new Result(row, Outcome.CREATED, username, row.reference() == null
-                    ? "No transaction reference; payment not recorded"
-                    : "No payment amount; payment not recorded");
-        }
-        if (benefits.settings().isEmpty()) {
+        if (row.reference() == null) {
             return new Result(row, Outcome.CREATED, username,
-                    "Entry fee not set in Benefit settings; payment not recorded");
+                    join("No transaction reference; payment not recorded", phoneNote));
         }
+        var settings = benefits.settings();
+        if (settings.isEmpty()) {
+            return new Result(row, Outcome.CREATED, username,
+                    join("Entry fee not set in Benefit settings; payment not recorded", phoneNote));
+        }
+        // A transaction reference signs the player up; without an amount, the entry fee is assumed.
+        long amount = row.amountPaise() != null ? row.amountPaise() : settings.get().feePaise();
         try {
-            benefits.recordImportedPayment(username, row.reference(), row.amountPaise());
+            benefits.recordImportedPayment(username, row.reference(), amount);
         } catch (IllegalArgumentException | IllegalStateException e) {
             return new Result(row, Outcome.CREATED, username,
-                    "Payment not recorded: " + e.getMessage());
+                    join("Payment not recorded: " + e.getMessage(), phoneNote));
         }
-        return new Result(row, Outcome.SIGNED_UP, username, null);
+        String feeNote = row.amountPaise() != null ? null
+                : "No payment amount; recorded the entry fee of " + rupees(amount);
+        return new Result(row, Outcome.SIGNED_UP, username,
+                feeNote == null ? phoneNote : join(feeNote, phoneNote));
+    }
+
+    private static String rupees(long paise) {
+        return "₹" + java.math.BigDecimal.valueOf(paise, 2).toPlainString();
+    }
+
+    private static String join(String message, String note) {
+        return note == null ? message : message + ". " + note;
     }
 
     private boolean referenceRecorded(String reference) {

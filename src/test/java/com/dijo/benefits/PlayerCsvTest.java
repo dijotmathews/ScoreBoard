@@ -19,7 +19,7 @@ class PlayerCsvTest {
         List<Row> rows = PlayerCsv.parse(HEADER
                 + "10/11/2026 9:00:00,ada@example.com,Ada Li,01/02/2012,https://drive/x,"
                 + "\"U12 Singles, U12 Doubles\",500,UPI123\n");
-        assertThat(rows).containsExactly(new Row(2, "Ada Li", 50000L, "UPI123", null));
+        assertThat(rows).containsExactly(new Row(2, "Ada Li", 50000L, "UPI123", null, null));
     }
 
     @Test
@@ -28,8 +28,23 @@ class PlayerCsvTest {
                 + "t\te\t\"Dijo \"\"DJ\"\" Mathews\"\td\tb\tev\t₹1,000\tREF-9\r\n\r\n"
                 + "t\te\tBo\td\tb\tev\t\t\n";
         assertThat(PlayerCsv.parse(tsv)).containsExactly(
-                new Row(2, "Dijo \"DJ\" Mathews", 100000L, "REF-9", null),
-                new Row(4, "Bo", null, null, null));
+                new Row(2, "Dijo \"DJ\" Mathews", 100000L, "REF-9", null, null),
+                new Row(4, "Bo", null, null, null, null));
+    }
+
+    @Test
+    void readsTheContactNumberWhenTheFormHasOne() {
+        List<Row> rows = PlayerCsv.parse("Players Name(AITA/AADHAR),Parent's Mobile Number,Payment Amount,"
+                + "Transaction Reference\nAda Li, 98765 43210 ,500,UPI1\nBo Chen,,,\n");
+        assertThat(rows).containsExactly(new Row(2, "Ada Li", 50000L, "UPI1", "98765 43210", null),
+                new Row(3, "Bo Chen", null, null, null, null));
+    }
+
+    @Test
+    void theSampleFileOfferedForDownloadIsValid() {
+        assertThat(PlayerCsv.parse(PlayerCsv.SAMPLE)).containsExactly(
+                new Row(2, "Ada Li", 50000L, "UPI123456789", "+91 98765 43210", null),
+                new Row(3, "Bo Chen", null, null, null, null));
     }
 
     @Test

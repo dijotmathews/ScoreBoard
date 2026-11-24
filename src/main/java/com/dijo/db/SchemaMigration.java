@@ -1,5 +1,6 @@
 package com.dijo.db;
 
+import com.dijo.benefits.PlayerAccountService;
 import com.dijo.events.DrawService;
 import com.dijo.events.EventService;
 import com.dijo.events.MatchService;
@@ -37,6 +38,8 @@ public class SchemaMigration implements InitializingBean {
     public void afterPropertiesSet() throws SQLException {
         if (tableExists(jdbc, "benefit_events")) migrateFromEventBenefits();
         addColumnIfMissing("users", "full_name", "TEXT");
+        addColumnIfMissing("users", "phone", "TEXT");
+        capitalizeFullNames();
         addColumnIfMissing("matches", "court", "TEXT");
         addColumnIfMissing("matches", "start_time", "TEXT");
         addColumnIfMissing("events", "draw_locked",
@@ -134,6 +137,19 @@ public class SchemaMigration implements InitializingBean {
         List<Map<String, Object>> broken = tx.queryForList("PRAGMA foreign_key_check");
         if (!broken.isEmpty()) {
             throw new IllegalStateException("Migration left broken references: " + broken);
+        }
+    }
+
+    /** Names stored before they were capitalized on save, as "ABEL JOE MANOJ", become "Abel Joe Manoj". */
+    private void capitalizeFullNames() {
+        List<Map<String, Object>> users = jdbc.queryForList(
+                "SELECT username, full_name FROM users WHERE full_name IS NOT NULL");
+        for (Map<String, Object> user : users) {
+            String name = (String) user.get("full_name");
+            String capitalized = PlayerAccountService.capitalizeName(name);
+            if (!capitalized.equals(name)) {
+                jdbc.update("UPDATE users SET full_name = ? WHERE username = ?", capitalized, user.get("username"));
+            }
         }
     }
 

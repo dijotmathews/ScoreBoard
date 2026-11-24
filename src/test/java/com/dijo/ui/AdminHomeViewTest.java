@@ -45,7 +45,7 @@ class AdminHomeViewTest extends UiTest {
         return event;
     }
 
-    /** Each card's rows as their text (players, round and match, then the badge), in order. */
+    /** Each card's rows as their text (round, sides, court/time, official, buttons), in order. */
     private List<String> rows(Card card) {
         return card.getChildren()
                 .flatMap(c -> c.getElement().getChildren().map(e -> e.getComponent().orElse(null)))
@@ -66,11 +66,11 @@ class AdminHomeViewTest extends UiTest {
                 .filter(c -> c.getParent().filter(p -> p.hasClassName("home-remaining")).isPresent())
                 .toList();
         assertThat(cards).hasSize(2);
-        assertThat(rows(cards.get(0))).containsExactly("ada vs bobFinal · Match 1Not scheduledScheduleResult");
+        assertThat(rows(cards.get(0))).containsExactly("Final · Match 1adabobNo court or timeNo officialScheduleResult");
         assertThat(rows(cards.get(1))).containsExactly(
-                "cy vs deeSemi-final · Match 2Court 2 · 10:30 AMScheduleResult",
-                "ada vs bobSemi-final · Match 1Not scheduledScheduleResult",
-                "TBD vs TBDFinal · Match 1Not scheduledScheduleResult");
+                "Semi-final · Match 2cydeeCourt 2 · 10:30 AMNo officialScheduleResult",
+                "Semi-final · Match 1adabobNo court or timeNo officialScheduleResult",
+                "Final · Match 1TBDTBDNo court or timeNo officialScheduleResult");
         // The final's players are not known yet, so its result cannot be entered.
         assertThat(find(Button.class).withText("Result").all().stream().map(Button::isEnabled))
                 .containsExactly(true, true, true, false);
@@ -111,6 +111,33 @@ class AdminHomeViewTest extends UiTest {
     }
 
     @Test
+    void flagsEnteredResultsToConfirmFirst() {
+        String singles = lockedDraw("Singles", "ada", "bob", "cy", "dee");
+        matches.recordResult(singles, 1, 2, "dee", "21-19");
+        navigate(AdminHomeView.class);
+
+        Card card = find(Card.class).all().stream()
+                .filter(c -> c.getParent().filter(p -> p.hasClassName("home-remaining")).isPresent())
+                .findFirst().orElseThrow();
+        assertThat(card.getElement().getTextRecursively()).contains("1 result to confirm");
+        assertThat(rows(card)).containsExactly(
+                "Semi-final · Match 2Result to confirmcydee21-19No court or timeNo officialEntered by adminScheduleReview & confirm",
+                "Semi-final · Match 1adabobNo court or timeNo officialScheduleResult",
+                "Final · Match 1TBDTBDNo court or timeNo officialScheduleResult");
+
+        click("Review & confirm");
+        click("Confirm");
+
+        assertThat(matches.currentMatch(singles, 1, 2).orElseThrow().confirmed()).isTrue();
+        assertThat(notifications()).contains("Result confirmed");
+        // The confirmed semi-final drops off; dee goes through to the final.
+        assertThat(visibleRows()).containsExactly(
+                "Semi-final · Match 1adabobNo court or timeNo officialScheduleResult",
+                "Final · Match 1TBDdeeNo court or timeNo officialScheduleResult");
+        assertThat(find(Button.class).withText("Review & confirm").exists()).isFalse();
+    }
+
+    @Test
     void scheduleButtonSetsCourtTimeAndOfficial() {
         data.account("olly", "OFFICIAL");
         String doubles = lockedDraw("Doubles", "ada", "bob");
@@ -129,7 +156,7 @@ class AdminHomeViewTest extends UiTest {
         assertThat(notifications()).contains("Match updated");
         assertThat(find(Div.class).all().stream().filter(d -> d.hasClassName("list-row"))
                 .map(d -> d.getElement().getTextRecursively()))
-                .containsExactly("ada vs bobFinal · Match 1 · ollyCourt 3 · 11:15 AMScheduleResult");
+                .containsExactly("Final · Match 1adabobCourt 3 · 11:15 AMollyScheduleResult");
 
         // Clearing them all unschedules the match.
         click("Schedule");
@@ -140,5 +167,50 @@ class AdminHomeViewTest extends UiTest {
         fin = matches.currentMatch(doubles, 1, 1).orElseThrow();
         assertThat(fin.scheduled()).isFalse();
         assertThat(fin.official()).isNull();
+    }
+
+    private List<String> visibleRows() {
+        return find(Div.class).all().stream().filter(d -> d.hasClassName("list-row"))
+                .map(d -> d.getElement().getTextRecursively()).toList();
+    }
+
+    private void search(String term) {
+        test(find(TextField.class).all().stream()
+                .filter(t -> "Search by player or event".equals(t.getPlaceholder())).findFirst().orElseThrow())
+                .setValue(term);
+    }
+
+    @Test
+    void searchesRemainingMatchesByPlayerOrEvent() {
+        lockedDraw("Singles", "ada", "bob", "cy", "dee");
+        lockedDraw("Doubles", "ada", "bob");
+        navigate(AdminHomeView.class);
+        assertThat(visibleRows()).hasSize(4);
+
+        // By player, case-insensitively: Ada plays in both events.
+        search("ADA");
+        assertThat(visibleRows()).containsExactly(
+                "Final · Match 1adabobNo court or timeNo officialScheduleResult",
+                "Semi-final · Match 1adabobNo court or timeNo officialScheduleResult");
+        assertThat(find(com.vaadin.flow.component.html.Span.class).withText("Showing 2 of 4 matches").exists())
+                .isTrue();
+
+        // By event name, and by both: every word must match.
+        search("singles");
+        assertThat(visibleRows()).hasSize(3);
+        search("dee singles");
+        assertThat(visibleRows()).containsExactly("Semi-final · Match 2cydeeNo court or timeNo officialScheduleResult");
+
+        search("zed");
+        assertThat(visibleRows()).isEmpty();
+        assertThat(find(com.vaadin.flow.component.html.Span.class)
+                .withText("No remaining matches for \"zed\".").exists()).isTrue();
+
+        // The search is kept when the list reloads after an update.
+        search("cy");
+        click("Schedule");
+        test(find(TextField.class).withLabel("Court").single()).setValue("4");
+        click("Save");
+        assertThat(visibleRows()).containsExactly("Semi-final · Match 2cydeeCourt 4No officialScheduleResult");
     }
 }

@@ -44,6 +44,37 @@ class PlayerImportServiceTest extends DatabaseTest {
     }
 
     @Test
+    void savesTheContactNumberAndImportsThePlayerEvenWhenTheNumberIsInvalid() {
+        List<Result> results = importer.importPlayers(PlayerCsv.parse(
+                "Players Name(AITA/AADHAR),Contact Number,Payment Amount,Transaction Reference\n"
+                + "Ada Li,+91 98765 43210,500,UPI1\nBo Chen,call me,500,UPI2\n"));
+
+        assertThat(results).extracting(Result::outcome).containsExactly(Outcome.SIGNED_UP, Outcome.SIGNED_UP);
+        assertThat(results.getLast().message()).startsWith("Contact number \"call me\" not saved: ");
+        assertThat(jdbc.queryForList("SELECT phone FROM users WHERE username IN ('adali', 'bochen')"
+                + " ORDER BY username", String.class)).containsExactly("+91 98765 43210", null);
+    }
+
+    @Test
+    void aTransactionReferenceWithoutAnAmountSignsUpForTheEntryFee() {
+        Result result = importCsv("t,e,Ada Li,d,b,ev,,UPI1\n").getFirst();
+
+        assertThat(result.outcome()).isEqualTo(Outcome.SIGNED_UP);
+        assertThat(result.message()).isEqualTo("No payment amount; recorded the entry fee of ₹500.00");
+        assertThat(benefits.playerBenefits("adali").amountPaise()).isEqualTo(50000);
+        assertThat(benefits.playerBenefits("adali").paymentReference()).isEqualTo("UPI1");
+        assertThat(benefits.playerBenefits("adali").coupons()).hasSize(2);
+    }
+
+    @Test
+    void anAmountWithoutATransactionReferenceDoesNotSignUp() {
+        Result result = importCsv("t,e,Ada Li,d,b,ev,500,\n").getFirst();
+        assertThat(result.outcome()).isEqualTo(Outcome.CREATED);
+        assertThat(result.message()).isEqualTo("No transaction reference; payment not recorded");
+        assertThat(count("SELECT count(*) FROM entry_payments")).isZero();
+    }
+
+    @Test
     void recordsTheAmountFromTheFileEvenWhenItDiffersFromTheFee() {
         Result result = importCsv("t,e,Ada Li,d,b,ev,700,UPI1\n").getFirst();
         assertThat(result.outcome()).isEqualTo(Outcome.SIGNED_UP);
