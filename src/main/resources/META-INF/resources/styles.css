@@ -387,6 +387,42 @@ vaadin-grid::part(match-alt) {
     margin: var(--vaadin-gap-m) 0 var(--vaadin-gap-s);
 }
 
+/* Remaining matches: the title with the search on the same line; the search shrinks
+   before it wraps, and only goes below the title on narrow phones */
+.home-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vaadin-gap-s) var(--vaadin-gap-m);
+    margin: var(--vaadin-gap-m) 0 var(--vaadin-gap-s);
+}
+
+.home-section-header .home-section-title {
+    margin: 0;
+    flex: none;
+}
+
+.home-section-header vaadin-text-field {
+    flex: 0 1 320px;
+    min-width: 0;
+    padding: 0;
+}
+
+.home-section-showing:not([hidden]) {
+    display: block;
+    margin-bottom: var(--vaadin-gap-s);
+}
+
+@media (max-width: 480px) {
+    .home-section-header {
+        flex-wrap: wrap;
+    }
+
+    .home-section-header vaadin-text-field {
+        flex-basis: 100%;
+    }
+}
+
 .home-remaining {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));

@@ -28,14 +28,19 @@ import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.progressbar.ProgressBar;
+import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.data.value.ValueChangeMode;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouterLink;
 import jakarta.annotation.security.RolesAllowed;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Route("admin")
 @PageTitle("Admin Home")
@@ -44,6 +49,10 @@ public class AdminHomeView extends VerticalLayout {
     private final MatchService matches;
     private final EventUpdates updates;
     private final Div remaining = new Div();
+    private final TextField search = new TextField();
+    private final Span showing = new Span();
+    /** Every remaining match, before the search. */
+    private List<Match> all = List.of();
     private Runnable unsubscribe;
 
     public AdminHomeView(PlayerBenefitsService benefits, EventService events, MatchService matches,
@@ -64,7 +73,17 @@ public class AdminHomeView extends VerticalLayout {
         H2 heading = new H2("Remaining matches");
         heading.addClassName("home-section-title");
         remaining.addClassName("home-remaining");
-        Div section = new Div(heading, remaining);
+        search.setPlaceholder("Search by player or event");
+        search.setAriaLabel("Search remaining matches by player or event");
+        search.setPrefixComponent(VaadinIcon.SEARCH.create());
+        search.setClearButtonVisible(true);
+        search.setValueChangeMode(ValueChangeMode.EAGER);
+        search.addValueChangeListener(e -> showRemaining());
+        showing.addClassName("muted");
+        showing.addClassName("home-section-showing");
+        Div top = new Div(heading, search);
+        top.addClassName("home-section-header");
+        Div section = new Div(top, showing, remaining);
         section.addClassName("home-section");
         add(PlayerUi.pageHeader("Admin Home", "Run the tournament from here."), links, section);
         reloadRemaining();
@@ -86,14 +105,38 @@ public class AdminHomeView extends VerticalLayout {
      * those with a court or time first, earliest first, then the rest in round order.
      */
     private void reloadRemaining() {
+        all = matches.remainingMatches();
+        showRemaining();
+    }
+
+    /** The remaining matches that match the search, keeping it across live reloads. */
+    private void showRemaining() {
         remaining.removeAll();
-        List<Match> list = matches.remainingMatches();
-        if (list.isEmpty()) {
+        List<String> terms = List.of(search.getValue().strip().toLowerCase(Locale.ROOT).split("\\s+"));
+        List<Match> list = all.stream().filter(m -> matchesSearch(m, terms)).toList();
+        search.setVisible(!all.isEmpty());
+        boolean filtered = list.size() < all.size();
+        showing.setText(filtered ? "Showing " + list.size() + " of " + all.size() + " matches" : "");
+        showing.setVisible(filtered);
+        if (all.isEmpty()) {
             remaining.add(PlayerUi.muted("No matches to play. Lock an event's draw to create its matches."));
+        } else if (list.isEmpty()) {
+            remaining.add(PlayerUi.muted("No remaining matches for \"" + search.getValue().strip() + "\"."));
         }
         Map<String, List<Match>> byEvent = list.stream()
                 .collect(Collectors.groupingBy(Match::eventId, LinkedHashMap::new, Collectors.toList()));
         byEvent.values().forEach(event -> remaining.add(eventCard(event)));
+    }
+
+    /**
+     * Every word of the search must appear in the event name or a player's name (both
+     * players of a doubles team) or username, so "ada singles" finds Ada's singles matches.
+     */
+    private static boolean matchesSearch(Match m, List<String> terms) {
+        String text = Stream.of(m.eventName(), m.side1(), m.side2(),
+                        m.player1(), m.player2(), m.player1Partner(), m.player2Partner())
+                .filter(Objects::nonNull).collect(Collectors.joining(" ")).toLowerCase(Locale.ROOT);
+        return terms.stream().allMatch(text::contains);
     }
 
     private Card eventCard(List<Match> list) {

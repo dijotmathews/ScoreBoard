@@ -141,4 +141,49 @@ class AdminHomeViewTest extends UiTest {
         assertThat(fin.scheduled()).isFalse();
         assertThat(fin.official()).isNull();
     }
+
+    private List<String> visibleRows() {
+        return find(Div.class).all().stream().filter(d -> d.hasClassName("list-row"))
+                .map(d -> d.getElement().getTextRecursively()).toList();
+    }
+
+    private void search(String term) {
+        test(find(TextField.class).all().stream()
+                .filter(t -> "Search by player or event".equals(t.getPlaceholder())).findFirst().orElseThrow())
+                .setValue(term);
+    }
+
+    @Test
+    void searchesRemainingMatchesByPlayerOrEvent() {
+        lockedDraw("Singles", "ada", "bob", "cy", "dee");
+        lockedDraw("Doubles", "ada", "bob");
+        navigate(AdminHomeView.class);
+        assertThat(visibleRows()).hasSize(4);
+
+        // By player, case-insensitively: Ada plays in both events.
+        search("ADA");
+        assertThat(visibleRows()).containsExactly(
+                "ada vs bobFinal · Match 1Not scheduledScheduleResult",
+                "ada vs bobSemi-final · Match 1Not scheduledScheduleResult");
+        assertThat(find(com.vaadin.flow.component.html.Span.class).withText("Showing 2 of 4 matches").exists())
+                .isTrue();
+
+        // By event name, and by both: every word must match.
+        search("singles");
+        assertThat(visibleRows()).hasSize(3);
+        search("dee singles");
+        assertThat(visibleRows()).containsExactly("cy vs deeSemi-final · Match 2Not scheduledScheduleResult");
+
+        search("zed");
+        assertThat(visibleRows()).isEmpty();
+        assertThat(find(com.vaadin.flow.component.html.Span.class)
+                .withText("No remaining matches for \"zed\".").exists()).isTrue();
+
+        // The search is kept when the list reloads after an update.
+        search("cy");
+        click("Schedule");
+        test(find(TextField.class).withLabel("Court").single()).setValue("4");
+        click("Save");
+        assertThat(visibleRows()).containsExactly("cy vs deeSemi-final · Match 2Court 4ScheduleResult");
+    }
 }
