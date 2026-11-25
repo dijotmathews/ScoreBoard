@@ -23,3 +23,10 @@ infra/.terraform/
 *.tfstate
 *.tfstate.*
 *.tfplan
+
+# Demo video recording (demo/run.sh)
+demo/node_modules/
+demo/clips/
+demo/demo.db*
+demo/app.log
+demo/*.mp4

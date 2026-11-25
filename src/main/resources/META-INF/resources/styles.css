@@ -707,3 +707,43 @@ vaadin-grid::part(match-alt) {
 .list-row.match-row.to-confirm + .list-row {
     border-top-color: transparent;
 }
+
+/* Player Home: what the player still has to do */
+.todo-card {
+    border-left: 4px solid var(--aura-orange);
+    background: color-mix(in srgb, var(--aura-orange) 8%, var(--aura-background-color, transparent));
+}
+
+.todo-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--vaadin-gap-s);
+    padding-block: var(--vaadin-padding-s);
+}
+
+.todo-item + .todo-item {
+    border-top: 1px solid var(--vaadin-border-color-secondary);
+}
+
+.todo-icon {
+    flex: none;
+    width: 1.1em;
+    height: 1.1em;
+    margin-top: 0.15em;
+    color: var(--aura-orange-text);
+}
+
+.todo-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vaadin-gap-xs);
+    min-width: 0;
+}
+
+.todo-title {
+    font-weight: 600;
+}
+
+.todo-body vaadin-button {
+    margin-top: var(--vaadin-gap-xs);
+}

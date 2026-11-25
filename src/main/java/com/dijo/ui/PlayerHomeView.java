@@ -6,6 +6,7 @@ import static com.dijo.ui.PlayerUi.listRow;
 import static com.dijo.ui.PlayerUi.muted;
 import static com.dijo.ui.PlayerUi.rows;
 
+import com.dijo.benefits.PlayerAccountService;
 import com.dijo.benefits.PlayerBenefitsService;
 import com.dijo.benefits.PlayerBenefitsService.Benefits;
 import com.dijo.events.DrawService;
@@ -15,25 +16,35 @@ import com.dijo.events.MatchService;
 import com.dijo.events.PlayerDraw;
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.DetachEvent;
+import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.badge.BadgeVariant;
+import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.card.Card;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.icon.Icon;
+import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/** The player's dashboard: next matches and a summary of events and benefits. */
+/**
+ * The player's dashboard: what they still have to do (pay the entry fee, add a contact
+ * number), next matches, and a summary of events and benefits.
+ */
 @Route("player")
 @PageTitle("Player Home")
 @RolesAllowed("USER")
 public class PlayerHomeView extends MobileHomeLayout {
     private final PlayerBenefitsService benefits;
+    private final PlayerAccountService accounts;
     private final DrawService draws;
     private final MatchService matches;
     private final EventUpdates updates;
@@ -41,10 +52,11 @@ public class PlayerHomeView extends MobileHomeLayout {
     private final VerticalLayout content = new VerticalLayout();
     private Runnable unsubscribe;
 
-    public PlayerHomeView(PlayerBenefitsService benefits, DrawService draws, MatchService matches,
-            EventUpdates updates, AuthenticationContext authentication) {
+    public PlayerHomeView(PlayerBenefitsService benefits, PlayerAccountService accounts, DrawService draws,
+            MatchService matches, EventUpdates updates, AuthenticationContext authentication) {
         super("Player Home");
         this.benefits = benefits;
+        this.accounts = accounts;
         this.draws = draws;
         this.matches = matches;
         this.updates = updates;
@@ -76,8 +88,46 @@ public class PlayerHomeView extends MobileHomeLayout {
         List<PlayerDraw> myDraws = draws.myDraws();
         List<Match> myMatches = matches.myPlayerMatches();
         String name = benefits.myName();
-        content.add(PlayerUi.header(name, "Welcome, " + name, mine != null),
-                nextMatches(myDraws, myMatches), atAGlance(mine, myDraws, myMatches));
+        content.add(PlayerUi.header(name, "Welcome, " + name, mine != null));
+        Card todo = toDo(mine != null, accounts.myPhone() != null);
+        if (todo != null) content.add(todo);
+        content.add(nextMatches(myDraws, myMatches), atAGlance(mine, myDraws, myMatches));
+    }
+
+    /** What the player still has to do, highlighted at the top; null when nothing is left. */
+    private Card toDo(boolean paid, boolean hasPhone) {
+        List<Component> items = new ArrayList<>();
+        if (!paid) {
+            items.add(toDoItem(VaadinIcon.WALLET, "Payment pending", benefits.settings()
+                    .map(s -> "Pay the entry fee of " + PlayerEditorDialog.rupees(s.feePaise())
+                            + " to the organisers. You are signed up once they record it.")
+                    .orElse("The organisers will share the entry fee soon."), null));
+        }
+        if (!hasPhone) {
+            Button add = new Button("Add contact number", VaadinIcon.PHONE.create(),
+                    e -> getUI().ifPresent(ui -> ui.navigate(PlayerProfileView.class)));
+            add.addThemeVariants(ButtonVariant.PRIMARY);
+            items.add(toDoItem(VaadinIcon.PHONE, "Contact number missing",
+                    "Add a mobile number so the organisers can reach you about your matches.", add));
+        }
+        if (items.isEmpty()) return null;
+        Card card = card("To do", badge(String.valueOf(items.size()), BadgeVariant.WARNING));
+        card.addClassName("todo-card");
+        items.forEach(card::add);
+        return card;
+    }
+
+    private static Div toDoItem(VaadinIcon icon, String title, String text, Button action) {
+        Icon mark = icon.create();
+        mark.addClassName("todo-icon");
+        Span heading = new Span(title);
+        heading.addClassName("todo-title");
+        Div body = new Div(heading, muted(text));
+        body.addClassName("todo-body");
+        if (action != null) body.add(action);
+        Div item = new Div(mark, body);
+        item.addClassName("todo-item");
+        return item;
     }
 
     /** Matches with both sides known and no confirmed result yet. */

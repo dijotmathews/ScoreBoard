@@ -51,6 +51,11 @@ Run the tests:
 ./mvnw test
 ```
 
+## Demo video
+
+[`demo/`](demo/README.md) records a short portrait walkthrough of the app for phones:
+`cd demo && ./run.sh` builds `demo/scoreboard-demo.mp4` from a fresh demo database.
+
 ## Production
 
 Build the jar with `./mvnw package`, or the image with `docker build -t scoreboard .`. The image runs with
